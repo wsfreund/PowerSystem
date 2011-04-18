@@ -10,8 +10,8 @@ classdef PassiveElement < handle & Source
   end
 
   methods
-    function pe = PassiveElement(ps,bus1,bus2,R,L,C,initialInjection)
-      pe@Source(initialInjection, 'special' )
+
+    function pe = PassiveElement(ps,bus1,bus2,R,L,C,initial_injection)
       % Check if bus1 == bus2
       if nargin > 3
         pe.bus1 = bus1;
@@ -32,12 +32,15 @@ classdef PassiveElement < handle & Source
           error('PowerSystemPkg:PassiveElement', 'Created')
         elseif nargin == 0
       end
+      pe@Source(initialInjection, 'special' )
     end % Constructor
+
+    function update(pe)
+      % Update injection with the series formula
+      pe.injection = Gseries*() pe.injection *...
+    end % update
+
   end % methods
 
-  function update(pe)
-    % Update injection with the series formula
-    pe.injection = Gseries*() pe.injection *...
-  end % update
 end
 

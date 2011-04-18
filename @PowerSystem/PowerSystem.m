@@ -1,8 +1,37 @@
 classdef PowerSystem < handle
-% TODO: Update class help
 %
-% Inputs:
-%   file: ASCII format file to take params, example:
+% Beta version sub zero
+%
+%   PowerSystem class is the main class from the PowerSystem Package. It is used to determine
+% in real time unknown voltages and currents for the Power System buses.
+%   It can be used to study transitories on the system, such as the system startup or changes
+% on switches.
+%   It uses discrete time method to calculate the variables for a constant step defined by 
+% user.
+%
+% PowerSystem (readFile,step)
+%
+%   readFile: ASCII format file used to build the Power System. 
+%
+%       One line for each element, if there are more than two elements in a line, 
+%       will cause either the second element or the whole line to be ignored. 
+%
+%       Words should always be separated by space and on CAPITAL LETTERS.
+%
+%       - Series passive element: The first two words should be the connection
+%       between BUSES, followed by: resistence, inductance and capacitance.
+%       
+%       - Source Connection: First word is the source connection, second word
+%       source type (CURRENT/VOLTAGE), and on the third word its magnetude.
+%
+%       - Switch Connection: First and second words are the switch BUSES
+%       connection, and the third word must be SWITCH. A fourth word can be used
+%       to inform the switch initial status (OPEN/CLOSED), if not informed it is OPEN by 
+%       default.
+%
+%       - TODO: Transmission line
+%
+%     example:
 %     BUS1 BUS6 6e-3
 %     BUS1 CURRENT 1
 %     BUS1 BUS2 52e-3
@@ -17,6 +46,7 @@ classdef PowerSystem < handle
 %     BUS6 VOLTAGE 1.05
 %     (Default value for switches = open)
 %   
+% TODO: Update class help
 
   properties(GetAccess = public, SetAccess = private) % Only PowerSystem can set these properties, but everyone can read them
     sysYmodif             %   sysYmodif: Matrix with admitances and nodes connections
@@ -27,71 +57,53 @@ classdef PowerSystem < handle
     sysStep = 1e-4;       %   sysStep: The time step
   end
 
-  properties
-
   events
-    Update                %   Update: PowerSystem is updating the sources injection values and switches status, if any switch has changed position
-    Run                   %   Run: PowerSystem is determing the output variables
-    Wait                  %   Wait: PowerSystem is waiting for next time step
-    Hold                  %   Hold: PowerSystem is on hold
+    %Update                %   Update: PowerSystem is updating the sources injection values and switches status, if any switch has changed position
+    %Run                   %   Run: PowerSystem is determing the output variables
+    %Wait                  %   Wait: PowerSystem is waiting for next time step
+    %Hold                  %   Hold: PowerSystem is on hold
     IncreasedTimeStep     %   IncreasedTimeStep: PowerSystem was forced to increase time step value, becouse the processor wasnt able to run with specified time
     % TODO Maybe this event should be set as a postSet from time step, and sysStep should be observable
   end
 
   methods( Access = public )
-    function ps = PowerSystem(readFile)
-      notify(ps,'Initializing');
+    function ps = PowerSystem(readFile, step)
       if nargin > 0
         % TODO GUI?
         ps.readPowerSystem(readFile)
-        end
-        addlistener(ps,'Update',@ps.update)
-        addlistener(ps,'Run',@ps.run)
-        addlistener(ps,'Wait',@ps.wait)
+        ps.step = step;
         for i=1:length(switches)
           lisSwitches(i) = addlistener(sysSwitches(i),'NewPosition',@ps.updateSwitch) % listen to all switches
         end
-        lisSwitchers = addlistener
-        notify(ps,'UpdateSources'); %Start running
+      else
+        error('PowerSystemPkg:PowerSystem','PowerSystem must be initialized with a file.');
       end
-    end
+      %ps.update % Only to test ( TODO: Add run and hold functions )
+    end % Constructor
   end % public methods
 
   methods( Access = private )
     function readPowerSystem(ps,file)
     function addSource(ps,source)
     function addPassiveElement(ps,pe)
-  end % private methods
-
-  methods( static )
-    function update(src)
-      for 1:length(src.sysPassiveElements)
-        src.sysPassiveElement.update()
+    function update(ps)
+      for k=1:length(ps.sysSources)
+        ps.sysSources(k).update()
       end
-      notify(ps,'Run');
+      for k=1:length(ps.sysPassiveElements)
+        ps.sysPassiveElements(k).update()
+      end
+      % TODO: Update the b vector
+      ps.Run;
     end % function update
-  
     function updateSwitch()
-      % TODO Discover switch bar and update to new status
+      % TODO Did any switch change its status? Update here...
     end
-
-    function run(src)
+    function run(ps)
       % Ax = b;
-      notify(ps,'Wait');
+      ps.update;
     end % function run
-
-    function wait(src)
-      if ( src.timer > step)
-        step = src.timer * 1.2;
-        notify(ps,'IncreasedStep')
-      end
-      while( src.timer < step )
-        % TODO: Probabily there is a better way than doing this!
-        % Do nothing, just wait until timer says it's time to run again
-      end
-      notify(ps,'UpdateSources');
-    end % wait
-  end % static methods
+  end % private methods
 end
 
 

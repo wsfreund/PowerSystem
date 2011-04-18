@@ -1,35 +1,30 @@
 function readPowerSystem(ps, file)
-% function readPowerSystem(ps, file)
-%
 
-
-  if (nargin == 1)
-    step = 1e-3;
-  end
   psFile = fopen(file,'r');
-  ps.sysYn = [];
-  ps.sysSources = [];
-  ps.sysPassiveElements = [];
-  ps.sysSwitches = {};
-  ps.variablesDescr= {};
 
   tLine = fgetl(psFile);
   lineC = 1;
   while (ischar(tLine))
+    % Initialize BUS connections
     firstBUS = -1;
     secondBUS = -1;
+    % Here tWords is an cell array containing two strings and 3 doubles. See textscan help.
     [tWords] = textscan(tLine,'%s %s %f64 %f64 %f64');
+    % Search for first BUS info
     if strfind(tWords{1}{1},'BUS')
       firstBUS = strread(tWords{1}{1},'BUS %d');
     elseif strfind(tWords{1}{1},'GROUND')
       firstBUS = strread(tWords{2}{1},'BUS %d');
       secondBUS = firstBUS;
     end
+    % Search for second BUS info
     if strfind(tWords{2}{1},'BUS')
       secondBUS = strread(tWords{2}{1},'BUS %d');
+    % is second word GROUND? 
     elseif strfind(tWords{2}{1},'GROUND')
-      secondBUS = firstBUS;
-    elseif strcmp(tWords{2}{1},'CURRENT')
+      secondBUS = firstBUS; % ...than set index equal  
+    % Checking for Sources:
+    elseif strcmp(tWords{2}{1},'CURRENT') % Current Sources
       tCurrent = tWords{3};
       if (isempty(tCurrent))
         display(sprintf('IGNORING BADLY FORMATED LINE NUMBER %d', lineC ));
@@ -37,11 +32,12 @@ function readPowerSystem(ps, file)
         lineC = lineC + 1;
         continue;
       end
-      ps.sysSources(firstBUS,1) = tCurrent;
+      tCurrentSource = Source(SourceTypes.Current,'sinoidal',tCurrent);
+      ps.sysSources(end+1) = tCurrentSource;
       tLine = fgetl(psFile);
       lineC = lineC + 1;
       continue;
-    elseif strcmp(tWords{2}{1},'VOLTAGE')
+    elseif strcmp(tWords{2}{1},'VOLTAGE') % Voltage Sources
       tVoltage = tWords{3};
       if (isempty(tVoltage))
         display(sprintf('IGNORING BADLY FORMATED LINE NUMBER %d', lineC ));
@@ -49,21 +45,24 @@ function readPowerSystem(ps, file)
         lineC = lineC + 1;
         continue;
       end
-      voltageSources(end+1) = {[firstBUS, tVoltage]};
+      tVoltageSource = Source(SourceTypes.Voltage,'sinoidal',tVoltage);
+      ps.sysSources(end+1) = tVoltageSource;
       tLine = fgetl(psFile);
       lineC = lineC + 1;
       continue;
     end
+    % I want the second BUS index always lesser than firstBUS (is this necessary?)
     if (firstBUS > secondBUS)
       temp = firstBUS;
       firstBUS = secondBUS;
       secondBUS = temp;
     end
+    % Resistence is supposed to be the third word
     tResistence = tWords{3};
-    if (isempty(tResistence))
-      tWords = textscan(tLine,'%*s %*s %s %s');
-      if strcmp(tWords{1}{1},'SWITCH')
-        if (firstBUS == secondBUS)
+    if (isempty(tResistence)) % Third word is not a double! Let's try reading it as a string.
+      tWords = textscan(tLine,'%*s %*s %s %s'); % read third and fourth word as strings, ignoring first and second words.
+      if strcmp(tWords{1}{1},'SWITCH') % is third word SWITCH?
+        if (firstBUS == secondBUS) % it shouldnt be a switch to the ground... as far as I know.
           display(sprintf('IGNORING BADLY FORMATED LINE NUMBER %d', lineC ));
         end
         if length(tWords{2}) ~= 0 & strfind(tWords{2}{1},'CLOSE')
@@ -71,26 +70,29 @@ function readPowerSystem(ps, file)
         else 
           ps.sysSwitches(end+1) = {[firstBUS, secondBUS, 0]};
         end
-      else
+      else % can't read this line
         display(sprintf('IGNORING BADLY FORMATED LINE NUMBER %d', lineC ));
       end
       tLine = fgetl(psFile);
       lineC = lineC + 1;
       continue;
     end
-    if ( ( firstBUS<0 | secondBUS<0 ) )
+    if ( ( firstBUS<0 | secondBUS<0 ) ) % Did someone write on the file any negative index? 
       display(sprintf('IGNORING BADLY FORMATED LINE NUMBER %d', lineC ));
       tLine = fgetl(psFile);
       lineC = lineC + 1;
       continue;
     end
+    % If we got this far, then we can fill the Y matrix...
     tInductance = 0.;
     tCapacitance = 0.;
+    % Inductance is supposed to be the forth word
     if (~isempty(tWords{4}))
-      tInductance = tWords{4}/(2*pi*60);
+      tInductance = tWords{4}/(2*pi*60); % Inputs should be on frequency domain
     end
+    % Capacitance is supposed to be the fifth word
     if (~isempty(tWords{5}))
-      tCapacitance = tWords{5}/(2*pi*60);
+      tCapacitance = tWords{5}/(2*pi*60);% Inputs should be on frequency domain
     end
     if (firstBUS == secondBUS)
       if (tInductance ~= 0)
