@@ -11,6 +11,12 @@ function readPowerSystem(ps, file)
     % Here tWords is an cell array containing two strings and 3 doubles. See textscan help.
     [tWords] = textscan(tLine,'%s %s %f64 %f64 %f64');
     % Search for first BUS info
+    if isempty(tWords{2}) || isempty(tWords{1})
+      display(sprintf('IGNORING BADLY FORMATED LINE NUMBER %d', lineC ));
+      tLine = fgetl(psFile);
+      lineC = lineC + 1;
+      continue;
+    end
     if strfind(tWords{1}{1},'BUS')
       firstBUS = strread(tWords{1}{1},'BUS %d');
     elseif strfind(tWords{1}{1},'GROUND')
@@ -22,7 +28,7 @@ function readPowerSystem(ps, file)
       secondBUS = strread(tWords{2}{1},'BUS %d');
     % is second word GROUND? 
     elseif strfind(tWords{2}{1},'GROUND')
-      secondBUS = firstBUS; % ...than set index equal  
+      secondBUS = 0; % ...than set it to zero
     % Checking for Sources:
     elseif strcmp(tWords{2}{1},'CURRENT') % Current Sources
       tCurrent = tWords{3};
@@ -32,8 +38,16 @@ function readPowerSystem(ps, file)
         lineC = lineC + 1;
         continue;
       end
-      tCurrentSource = Source(SourceTypes.Current,'sinoidal',tCurrent);
-      ps.sysSources(end+1) = tCurrentSource;
+      lastWord = textscan(tLine,'%*s %*s %*f64 %s');
+      if isempty(lastWord{1})
+        tCurrentSource = Source(firstBUS, SourceTypes.Current,'sinoidal',tCurrent);
+        ps.sysCurrentSources = [ps.sysCurrentSources; tCurrentSource];
+      elseif strcmp(lastWord{1}{1},'SINOIDAL') || strcmp(lastWord{1}{1},'STEP')
+        tCurrentSource = Source(firstBUS, SourceTypes.Current,lower(lastWord{1}{1}),tCurrent);
+        ps.sysCurrentSources = [ps.sysCurrentSources; tCurrentSource];
+      else
+        display(sprintf('IGNORING BADLY FORMATED LINE NUMBER %d', lineC ));
+      end
       tLine = fgetl(psFile);
       lineC = lineC + 1;
       continue;
@@ -45,8 +59,8 @@ function readPowerSystem(ps, file)
         lineC = lineC + 1;
         continue;
       end
-      tVoltageSource = Source(SourceTypes.Voltage,'sinoidal',tVoltage);
-      ps.sysSources(end+1) = tVoltageSource;
+      tVoltageSource = Source(firstBUS, SourceTypes.Voltage,'sinoidal',tVoltage);
+      ps.sysVoltageSources = [ps.sysVoltageSources; tVoltageSource];
       tLine = fgetl(psFile);
       lineC = lineC + 1;
       continue;
@@ -57,28 +71,32 @@ function readPowerSystem(ps, file)
       firstBUS = secondBUS;
       secondBUS = temp;
     end
+    if ( ( firstBUS<0 || secondBUS<0 ) ) % Did someone write on the file any negative index? 
+      display(sprintf('IGNORING BADLY FORMATED LINE NUMBER %d', lineC ));
+      tLine = fgetl(psFile);
+      lineC = lineC + 1;
+      continue;
+    end
     % Resistence is supposed to be the third word
     tResistence = tWords{3};
     if (isempty(tResistence)) % Third word is not a double! Let's try reading it as a string.
       tWords = textscan(tLine,'%*s %*s %s %s'); % read third and fourth word as strings, ignoring first and second words.
       if strcmp(tWords{1}{1},'SWITCH') % is third word SWITCH?
-        if (firstBUS == secondBUS) % it shouldnt be a switch to the ground... as far as I know.
+        if (firstBUS == 0) % it shouldnt be a switch to the ground... as far as I know.
           display(sprintf('IGNORING BADLY FORMATED LINE NUMBER %d', lineC ));
         end
-        if length(tWords{2}) ~= 0 & strfind(tWords{2}{1},'CLOSE')
-          ps.sysSwitches(end+1) = {[firstBUS, secondBUS, 1]};
+        if ~isempty(tWords{2}) && strfind(tWords{2}{1},'CLOSE')
+          tSwitch = Switch(firstBUS,secondBUS,SwitchStatus.Closed);
+          ps.sysSwitches = [ps.sysSwitches; tSwitch];
+          addlistener(tSwitch,'NewPosition',@ps.updateSwitch);
         else 
-          ps.sysSwitches(end+1) = {[firstBUS, secondBUS, 0]};
+          tSwitch = Switch(firstBUS,secondBUS,SwitchStatus.Open);
+          ps.sysSwitches = [ps.sysSwitches; tSwitch];
+          addlistener(tSwitch,'NewPosition',@ps.updateSwitch);
         end
       else % can't read this line
         display(sprintf('IGNORING BADLY FORMATED LINE NUMBER %d', lineC ));
       end
-      tLine = fgetl(psFile);
-      lineC = lineC + 1;
-      continue;
-    end
-    if ( ( firstBUS<0 | secondBUS<0 ) ) % Did someone write on the file any negative index? 
-      display(sprintf('IGNORING BADLY FORMATED LINE NUMBER %d', lineC ));
       tLine = fgetl(psFile);
       lineC = lineC + 1;
       continue;
@@ -92,114 +110,109 @@ function readPowerSystem(ps, file)
     end
     % Capacitance is supposed to be the fifth word
     if (~isempty(tWords{5}))
-      tCapacitance = tWords{5}/(2*pi*60);% Inputs should be on frequency domain
+      tCapacitance = 1/(2*pi*60*tWords{5});% Inputs should be on frequency domain
     end
-    if (firstBUS == secondBUS)
-      if (tInductance ~= 0)
-        if (tCapacitance ~= 0)
-          ps.sysYn(firstBUS,firstBUS) = ps.sysYn(firstBUS,firstBUS) + 1/(tResistence + (2*tInductance)/step + step/(2*tCapacitance));
-        else
-          ps.sysYn(firstBUS,firstBUS) = ps.sysYn(firstBUS,firstBUS) + 1/(tResistence + (2*tInductance)/step);
-        end
-      elseif (tCapacitance ~= 0)
-        ps.sysYn(firstBUS,firstBUS) = ps.sysYn(firstBUS,firstBUS) + 1/(tResistence + step/(2*tCapacitance));
+    if (firstBUS == 0) % Shunt element
+      if (tInductance ~= 0 || tCapacitance ~= 0)
+        tPassiveElement = PassiveElement(ps.sysStep,firstBUS,secondBUS,tResistence,tInductance,tCapacitance);
+        ps.sysYmodif(secondBUS,secondBUS) = ps.sysYmodif(secondBUS,secondBUS) + tPassiveElement.Gseries;
+        ps.sysPassiveElements = [ps.sysPassiveElements; tPassiveElement];
       else
-        ps.sysYn(firstBUS,firstBUS) = ps.sysYn(firstBUS,firstBUS) + 1/tResistence;
+        ps.sysYmodif(secondBUS,secondBUS) = ps.sysYmodif(secondBUS,secondBUS) + 1/tResistence;
       end
-    else
-      if (tInductance ~= 0)
-        if (tCapacitance ~= 0)
-          ps.sysYn(firstBUS,secondBUS) = -ps.sysYn(firstBUS,secondBUS) + 1/(tResistence + (2*tInductance)/step + step/(2*tCapacitance));
-          ps.sysYn(secondBUS,firstBUS) = -ps.sysYn(secondBUS,firstBUS) + 1/(tResistence + (2*tInductance)/step + step/(2*tCapacitance));
-          ps.sysPassiveElements(firstBUS) = 0;
-          ps.sysPassiveElements(secondBUS) = -0;
-        else
-          ps.sysYn(firstBUS,secondBUS) = -ps.sysYn(firstBUS,secondBUS) + 1/(tResistence + (2*tInductance)/step);
-          ps.sysYn(secondBUS,firstBUS) = -ps.sysYn(secondBUS,firstBUS) + 1/(tResistence + (2*tInductance)/step);
-          ps.sysPassiveElements(firstBUS) = 0;
-          ps.sysPassiveElements(secondBUS) = -0;
-        end
-      elseif (tCapacitance ~= 0)
-        ps.sysYn(firstBUS,secondBUS) = -ps.sysYn(firstBUS,secondBUS) + 1/(tResistence + step/(2*tCapacitance));
-        ps.sysYn(secondBUS,firstBUS) = -ps.sysYn(secondBUS,firstBUS) + 1/(tResistence + step/(2*tCapacitance));
-        ps.sysPassiveElements(firstBUS) = 0;
-        ps.sysPassiveElements(secondBUS) = -0;
+    else % firstBUS to secondBUS connection
+      if (tInductance ~= 0 || tCapacitance ~= 0)
+        tPassiveElement = PassiveElement(ps.sysStep,firstBUS,secondBUS,tResistence,tInductance,tCapacitance);
+        ps.sysYmodif(firstBUS,secondBUS) = -tPassiveElement.Gseries;
+        ps.sysYmodif(secondBUS,firstBUS) = -tPassiveElement.Gseries;
+        ps.sysYmodif(firstBUS,firstBUS) = ps.sysYmodif(firstBUS,firstBUS) + tPassiveElement.Gseries;
+        ps.sysYmodif(secondBUS,secondBUS) = ps.sysYmodif(secondBUS,secondBUS) + tPassiveElement.Gseries;
+        ps.sysPassiveElements = [ps.sysPassiveElements; tPassiveElement];
       else
-        ps.sysYn(firstBUS,secondBUS) = -1/tResistence;
-        ps.sysYn(secondBUS,firstBUS) = -1/tResistence;
-        ps.sysPassiveElements(firstBUS) = 0;
-        ps.sysPassiveElements(secondBUS) = -0;
+        ps.sysYmodif(firstBUS,secondBUS) = -1/tResistence;
+        ps.sysYmodif(secondBUS,firstBUS) = -1/tResistence;
+        ps.sysYmodif(firstBUS,firstBUS) = ps.sysYmodif(firstBUS,firstBUS) + 1/tResistence;
+        ps.sysYmodif(secondBUS,secondBUS) = ps.sysYmodif(secondBUS,secondBUS) + 1/tResistence;
       end
     end
     tLine = fgetl(psFile);
     lineC = lineC + 1;
   end
 
-  lastRow = size(ps.sysYn,1);
-  if ( length(ps.sysSources < lastRow ))
-    ps.sysSources(lastRow) = 0;
-  end
+  lastRow = size(ps.sysYmodif,1);
 
   for k=1:lastRow
-      ps.variablesDescr(k) = {sprintf('VOLTAGE ON %d',k)};
+      ps.sysVariablesDescr(k) = {sprintf('VOLTAGE ON %d',k)};
   end
 
-  for k=1:(length(voltageSources))
-    for m=k:length(voltageSources)
-      if (voltageSources{k}(1) > voltageSources{m}(1) )
-        tempCell = voltageSources{k};
-        voltageSources{k} = voltageSources{m};
-        voltageSources{m} = tempCell;
+  % Sort Voltage Sources
+  for k=1:(length(ps.sysVoltageSources))
+    for m=k:length(ps.sysVoltageSources)
+      if (ps.sysVoltageSources(k).busK > ps.sysVoltageSources(m).busK )
+        tempSource = ps.sysVoltageSources(k);
+        ps.sysVoltageSources(k) = ps.sysVoltageSources(m);
+        ps.sysVoltageSources(m) = tempSource;
       end
     end
   end
 
-  for k=1:(length(ps.sysSwitches))
-    for m=k:length(ps.sysSwitches)
-      if (ps.sysSwitches{k}(1) > ps.sysSwitches{m}(1) )
-        tempCell = ps.sysSwitches{k};
-        ps.sysSwitches{k} = ps.sysSwitches{m};
-        ps.sysSwitches{m} = tempCell;
+  % Sort Current Sources
+  for k=1:(length(ps.sysCurrentSources))
+    for m=k:length(ps.sysCurrentSources)
+      if (ps.sysCurrentSources(k).busK > ps.sysCurrentSources(m).busK )
+        tempSource = ps.sysCurrentSources(k);
+        ps.sysCurrentSources(k) = ps.sysCurrentSources(m);
+        ps.sysCurrentSources(m) = tempSource;
       end
     end
   end
 
+  % Sort Switches 
   for k=1:(length(ps.sysSwitches))
     for m=k:length(ps.sysSwitches)
-      if ( (ps.sysSwitches{k}(1) == ps.sysSwitches{m}(1)) & (ps.sysSwitches{k}(2) > ps.sysSwitches{m}(2)) )
-        tempCell = ps.sysSwitches{k};
-        ps.sysSwitches{k} = ps.sysSwitches{m};
-        ps.sysSwitches{m} = tempCell;
+      if (ps.sysSwitches(k).busK > ps.sysSwitches(m).busK )
+        tempSwitch = ps.sysSwitches{k};
+        ps.sysSwitches(k) = ps.sysSwitches(m);
+        ps.sysSwitches(m) = tempSwitch;
+      end
+    end
+  end
+  for k=1:(length(ps.sysSwitches))
+    for m=k:length(ps.sysSwitches)
+      if ( (ps.sysSwitches(k).busK == ps.sysSwitches(m).busK) && ( ps.sysSwitches(k).busM > ps.sysSwitches(m).busM ) )
+        tempSwitch = ps.sysSwitches(k);
+        ps.sysSwitches(k) = ps.sysSwitches(m);
+        ps.sysSwitches(m) = tempSwitch;
       else
         continue;
       end
     end
   end
 
+  svSize = length(ps.sysVoltageSources);
+  sswitchSize = length(ps.sysSwitches);
 
-  for k=1:length(voltageSources)
-    newRow = size(ps.sysYn,1)+1;
-    ps.sysYn(newRow:end+1,:) = ps.sysYn(newRow-1:end,:);
-    ps.sysYn(newRow-1,newRow) = 1;
-    ps.sysYn(newRow,newRow-1) = 1;
-    ps.sysSources(newRow:end+1) = ps.sysSources(newRow-1,end);
-    ps.sysSources(newRow) = voltageSources{k}(2);
-    ps.variablesDescr(newRow) = {sprintf('CURRENT ON %d',voltageSources{k}(1))};
+  % Expand matrix
+  ps.sysYmodif(end+svSize+sswitchSize,end+svSize+sswitchSize)=0; 
+
+  % Fill sV
+  for k=1:length(ps.sysVoltageSources)
+    ps.sysYmodif(lastRow+k,lastRow+k-1) = 1;
+    ps.sysYmodif(lastRow+k-1,lastRow+k) = 1;
+    ps.sysVariablesDescr(lastRow+k) = {sprintf('CURRENT ON %d',ps.sysVoltageSources.busK)};
   end
 
+  % Fill sSwitch
   for k=1:length(ps.sysSwitches)
-    newRow = size(ps.sysYn,1)+1;
-    switchStatus = ps.sysSwitches{k}(3);
-    if switchStatus
-      ps.sysYn(newRow,ps.sysSwitches{k}(2)) = switchStatus;
-      ps.sysYn(newRow,ps.sysSwitches{k}(1)) = switchStatus;
-      ps.sysYn(ps.sysSwitches{k}(2),newRow) = switchStatus;
-      ps.sysYn(ps.sysSwitches{k}(1),newRow) = switchStatus;
+    if ( ps.sysSwitches(k).status == SwitchStatus.Closed)
+      ps.sysYmodif(lastRow+svSize+k,lastRow+svSize+k) = 1;
     else
-      ps.sysYn(newRow,newRow) = 1;
+      ps.sysYmodif(lastRow+svSize+k,ps.sysSwitches(k).busK) = 1;
+      ps.sysYmodif(lastRow+svSize+k,ps.sysSwitches(k).busM) = 1;
+      ps.sysYmodif(ps.sysSwitches(k).busK,lastRow+svSize+k) = 1;
+      ps.sysYmodif(ps.sysSwitches(k).busM,lastRow+svSize+k) = 1;
     end
-    ps.sysSources(newRow) = 0;
-    ps.variablesDescr(newRow) = {sprintf('CURRENT ON SWITCH %d-%d',ps.sysSwitches{k}(1),ps.sysSwitches{k}(2))};
+    ps.sysVariablesDescr(lastRow+svSize+k) = {sprintf('CURRENT ON SWITCH %d-%d',ps.sysSwitches(k).busK,ps.sysSwitches(k).busM)};
   end
 
   fclose(psFile);

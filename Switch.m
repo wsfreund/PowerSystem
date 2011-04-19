@@ -1,42 +1,66 @@
 classdef Switch < handle
-% TODO: Switch Help
-  properties(GetAccess = public, SetAccess = private) % Only Switch can set these properties, but everyone can read them
-    bus1 = uint32(0);   % bus1 = System Bus 1
-    bus2 = uint32(0);   % bus2 = System Bus 2
-  end
+%
+%   Switch class is implemented for the PowerSystem Package and it's 
+%     used for all switches on the circuit.
+%
+%   Its constructor is defined as following:
+%
+%   Switch(busK, busM, status)
+%    busK: defines first bus connection from the switch
+%    busM: defines second bus connection from the switch
+%    status: defines switch initial status. It must be a SwitchStatus object: SwitchStatus.Open/Closed (default Open)
+%
 
-  properties(Access = private) % Only Switch can set and read these properties
-    status = SwitchStatus.Open;
+  properties(GetAccess = public, SetAccess = private) % Only Switch can set these properties, but everyone can read them
+    busK = 0;                     % bus1: System first Switch connection
+    busM = 0;                     % bus2: System second Switch connection
+    status = SwitchStatus.Open;   % status: The switch status
   end
 
   methods
+    function sw = Switch(busK, busM, status)
+      if nargin > 0
+        if nargin == 2
+          status = SwitchStatus.Open
+        end
+        sw.busK = busK;
+        sw.busM = busM;
+        if isa(sw.status,'SwitchStatus')
+          sw.status = status;
+        else
+          error('PowerSystemPkg:Switch', 'status must be a SwitchStatus object: SwitchStatus.Open/Closed');
+        end
+      end
+    end % Constructor
+
     function bool = isOpen(sw)
       bool = (SwitchStatus.Open == sw.status);
     end % function isOpen
 
     function bool = isClosed(sw)
-      bool = (Switch.Closed == sw.status);
+      bool = (SwitchStatus.Closed == sw.status);
     end % function isClosed
 
-    function changePosition(sw)
-      if (sw.status == SwitchStatus.Open)
-        sw.status = Switchstatus.Closed;
-      else
-        sw.status = Switchstatus.Open;
+    function changePosition(sw,position)
+      if nargin == 1
+        if (sw.status == SwitchStatus.Open)
+          sw.status = SwitchStatus.Closed;
+        else
+          sw.status = SwitchStatus.Open;
+        end
+        notify(sw,'NewPosition');
+      elseif nargin == 2
+        if(isa(position,'SwitchStatus'))
+          if (sw.status ~= position)
+            sw.status = position;
+            notify(sw,'NewPosition');
+          end
+        else
+          error('PowerSystemPkg:Switch','Position must be a SwitchStatus object (SwitchStatus.Open/Closed).');
+        end
       end
-      notify(sw,'NewPosition');
     end % function changePosition
 
-    function changePosition(sw,position)
-      if(isa(position,'SwitchStatus')
-        if (sw.status ~= position)
-          sw.status = position;
-          notify(sw,'NewPosition');
-        end
-      else
-        error('PowerSystemPkg:Switch','Position must be a SwitchStatus object (SwitchStatus.Open/Closed).');
-      end
-    end % function changePosition
   end % methods
 
   events

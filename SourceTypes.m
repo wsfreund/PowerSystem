@@ -1,7 +1,6 @@
-classdef SourceTypes
-  enumeration % Possible ways that a switch can be
-    Current
-    Voltage
+classdef(Enumeration) SourceTypes < Simulink.IntEnumType
+  enumeration % Possible source types
+    Current(0), Voltage(1)
   end
 end
 
