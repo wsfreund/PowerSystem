@@ -33,7 +33,7 @@ classdef PassiveElement < handle & Source
 
   methods
     function pe = PassiveElement(step,busK,busM,R,L,C,initial_injection)
-      if ( (nargin < 5) & (nargin > 0) ) % It is not possible to initialize without at least 5 arguments.
+      if ( (nargin < 5) && (nargin > 0) ) % It is not possible to initialize without at least 5 arguments.
         error('PowerSystemPkg:PassiveElement', 'You must specify at least 5 args to construct a PassiveElement PassiveElement(ps,bus1,bus2,R,L,C,initial_injection)');
       end
       if nargin == 0
@@ -56,9 +56,9 @@ classdef PassiveElement < handle & Source
         pe.injection = initial_injection;
         if ( C ~= 0 ) % With Capacitor:
           pe.Gseries = 1 / (R + 2*L/step + step/(2*C));
-          pe.update_vC = @() pe.Vc + (step/(2*ps.C)) * (pe.injection_function+pe.old_injection);
+          pe.update_vC = @() pe.Vc + (step/(2*pe.C)) * (pe.injection+pe.old_injection);
           pe.injection_function = @(prev_injection, vbus1, vbus2) ...
-            pe.Gseries*( (2*pe.L/step - pe.R - step/(2*ps.C))*prev_injection ...
+            pe.Gseries*( (2*pe.L/step - pe.R - step/(2*pe.C))*prev_injection ...
             + vbus1 - vbus2 - 2*pe.Vc );
         else % Without capacitor:
           pe.injection_function = @(prev_injection, vbus1, vbus2) ...

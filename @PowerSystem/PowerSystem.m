@@ -49,12 +49,16 @@ classdef PowerSystem < handle
 
   properties(GetAccess = public, SetAccess = private) % Only PowerSystem can set these properties, but everyone can read them
     sysYmodif = []            %   sysYmodif: Matrix with admitances and nodes connections
+    sysInvYmodif = []         %   sysInvYmodif: Matrix with admitances and nodes connections
     sysSwitches  = []         %   sysSwitches: Vector containing the system switches
     sysCurrentSources = []    %   sysCurrentSources: Vector containing the system current sources
     sysVoltageSources = []    %   sysVoltageSources: Vector containing the system voltage sources
     sysPassiveElements = []   %   sysPassiveElements: Vector containing the passive elements
     sysVariablesDescr = {}    %   sysVariablesDescr: Cell array containing the description for the output variables
-    sysStep = 1e-4;           %   sysStep: The time step
+    sysStep = 10e-6;          %   sysStep: The time step
+    sysInjectionVector = []   %   sysInjectionVector: Vector containing all bus known (current and voltage) injections
+    sysVariablesVector = []   %   sysVariablesVector: Vector containing all bus variables (current and voltage) injections
+    sysNumberOfBuses = 0;     %   sysNumberOfBuses: Total number of buses in the system
   end
 
   methods( Access = public )
@@ -62,25 +66,58 @@ classdef PowerSystem < handle
       if nargin > 0
         ps.sysStep = step;
         ps.readPowerSystem(readFile);
+        ps.sysInvYmodif= inv(ps.sysYmodif);
         % TODO: Set b vector as annonymous function dependent on sources injections
       else
         error('PowerSystemPkg:PowerSystem','PowerSystem must be initialized with a file.');
       end
     end % Constructor
+    function run(ps)
+      for t=0:sysStep:timeLimit
+        ps.sysInjectionVector = zeros(1,size(sysYmodif,2));
+        for k=1:length(ps.sysCurrentSources)
+          ps.sysInjectionVector(ps.sysCurrentSources(k).busK) =  ps.sysInjectionVector(ps.sysCurrentSources(k).busK) + ps.sysCurrentSources(k).injection;
+        end
+        %ps.sysInjectionVector(ps.sysNumberOfBuses+1:ps.sysNumberOfBuses+ps.sysVoltageSources(k).busK+1) = ps.sysInjectionVector(ps.sysVoltageSources(k).busK+ps.sysNumberOfBuses) + ps.sysVoltageSources(k).injection;
+        %end
+        for k=1:length(ps.sysPassiveElements)
+          %ps.sysInjectionVector(
+        end
+        ps.sysVariablesVector = ps.sysInjectionVector * ps.sysInjectionVector;
+        % Update Sources
+        for k=1:length(ps.sysCurrentSources)
+          ps.sysCurrentSources(k).update(t)
+        end
+        for k=1:length(ps.sysVoltageSources)
+          ps.sysVoltageSources(k).update(t)
+        end
+        %for k=1:length(ps.sysPassiveElements)
+        %  ps.sysPassiveElements(k).update(...
+        %    ps.sysVariablesVector(ps.sysPassiveElements(k).busK),...
+        %    ps.sysVariablesVector(ps.sysPassiveElements(k).busM),...
+        %  );
+        %end
+      end
+    end % function run
   end % public methods
 
   methods( Access = private )
-    readPowerSystem(ps,file)
-    function updateSwitch( src )
-      % TODO Did any switch change its status? Update here...
-    end
-    function run(ps)
-      %while(0:sysStep:timeLimit)
-      % TODO: inv (sysYmodif)
-      % Ax = b;
-      % TODO: Update Sources
-      %end
-    end % function run
+    readPowerSystem(ps,file) % see readPowerSystem
+    function updateSwitch(ps,src)
+      swichIdx = find( ps.sysSwitches == src );
+      if src.isOpen
+        tempLine = zeros(1,ps.sysNumberOfBuses);
+        tempLine(switchIdx) = 1;
+        ps.sysYmodif(switchIdx,:) = tempLine;
+        ps.sysInvYmodif = inv(ps.sysYmodif);
+      else
+        tempLine = zeros(1,ps.sysNumberOfBuses);
+        tempLine(src.busK) = 1;
+        tempLine(src.busM) = -1;
+        ps.sysYmodif(switchIdx,:) = tempLine;
+        ps.sysInvYmodif = inv(ps.sysYmodif);
+      end
+    end % updateSwitch
   end % private methods
 
 end

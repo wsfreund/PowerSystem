@@ -139,9 +139,9 @@ function readPowerSystem(ps, file)
     lineC = lineC + 1;
   end
 
-  lastRow = size(ps.sysYmodif,1);
+  ps.sysNumberOfBuses = size(ps.sysYmodif,1);
 
-  for k=1:lastRow
+  for k=1:ps.sysNumberOfBuses
       ps.sysVariablesDescr(k) = {sprintf('VOLTAGE ON %d',k)};
   end
 
@@ -197,22 +197,22 @@ function readPowerSystem(ps, file)
 
   % Fill sV
   for k=1:length(ps.sysVoltageSources)
-    ps.sysYmodif(lastRow+k,lastRow+k-1) = 1;
-    ps.sysYmodif(lastRow+k-1,lastRow+k) = 1;
-    ps.sysVariablesDescr(lastRow+k) = {sprintf('CURRENT ON %d',ps.sysVoltageSources.busK)};
+    ps.sysYmodif(ps.sysNumberOfBuses+k,ps.sysNumberOfBuses+k-1) = 1;
+    ps.sysYmodif(ps.sysNumberOfBuses+k-1,ps.sysNumberOfBuses+k) = 1;
+    ps.sysVariablesDescr(ps.sysNumberOfBuses+k) = {sprintf('CURRENT ON %d',ps.sysVoltageSources.busK)};
   end
 
   % Fill sSwitch
   for k=1:length(ps.sysSwitches)
     if ( ps.sysSwitches(k).status == SwitchStatus.Closed)
-      ps.sysYmodif(lastRow+svSize+k,lastRow+svSize+k) = 1;
+      ps.sysYmodif(ps.sysNumberOfBuses+svSize+k,ps.sysNumberOfBuses+svSize+k) = 1;
     else
-      ps.sysYmodif(lastRow+svSize+k,ps.sysSwitches(k).busK) = 1;
-      ps.sysYmodif(lastRow+svSize+k,ps.sysSwitches(k).busM) = 1;
-      ps.sysYmodif(ps.sysSwitches(k).busK,lastRow+svSize+k) = 1;
-      ps.sysYmodif(ps.sysSwitches(k).busM,lastRow+svSize+k) = 1;
+      ps.sysYmodif(ps.sysNumberOfBuses+svSize+k,ps.sysSwitches(k).busK) = 1;
+      ps.sysYmodif(ps.sysNumberOfBuses+svSize+k,ps.sysSwitches(k).busM) = 1;
+      ps.sysYmodif(ps.sysSwitches(k).busK,ps.sysNumberOfBuses+svSize+k) = 1;
+      ps.sysYmodif(ps.sysSwitches(k).busM,ps.sysNumberOfBuses+svSize+k) = 1;
     end
-    ps.sysVariablesDescr(lastRow+svSize+k) = {sprintf('CURRENT ON SWITCH %d-%d',ps.sysSwitches(k).busK,ps.sysSwitches(k).busM)};
+    ps.sysVariablesDescr(ps.sysNumberOfBuses+svSize+k) = {sprintf('CURRENT ON SWITCH %d-%d',ps.sysSwitches(k).busK,ps.sysSwitches(k).busM)};
   end
 
   fclose(psFile);
