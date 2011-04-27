@@ -29,7 +29,6 @@ classdef PassiveElement < handle & Source
 
   properties(Access = private, Hidden) % Only PassiveElement can set and see these properties
     Vc = 0.;                                    % Vc: Capacitor Voltage;
-    update_vC;                                  % update_vC : Unnamed function depend on system step used to calculate the capacitor voltage: 
     prev_ikm = 0.;                              % prev_ikm: Current flowing from bus k to bus m on t - Delta_t;
     L2DivStep = 0.;                             % L/step;
     stepDiv2C = 0.;                             % step/C;
@@ -75,22 +74,21 @@ classdef PassiveElement < handle & Source
       end
     end % Constructor
 
-    function update(pe,vbusK,vbusM,prev_vbusK,prev_vbusM)
+    function update_injection(pe,prev_vbusK,prev_vbusM)
+      pe.prev_ikm = pe.ikm; % save previous ikm
       % Update injection
       if pe.C
-        pe.prev_ikm = pe.ikm; % save previous ikm
         pe.injection = pe.injection_function(pe.prev_ikm,prev_vbusK,prev_vbusM); % Update source injection (hist current)
-        pe.ikm = pe.injection + pe.Gseries*(vbusK-vbusM); % update ikm
-        pe.Vc = pe.Vc + (pe.stepDiv2C) * ( pe.ikm + pe.prev_ikm );
       else
-        % Here we can save some time by just passing the ikm into injection function before updating it:
-        pe.injection = pe.injection_function(pe.ikm,prev_vbusK,prev_vbusM); % Update source injection (hist current)
-        pe.ikm = pe.injection + pe.Gseries*(vbusK-vbusM); % update ikm
+        pe.injection = pe.injection_function(pe.prev_ikm,prev_vbusK,prev_vbusM); % Update source injection (hist current)
       end
     end % update
-    function setInitialInjection(pe,vbusK,vbusM)
-      pe.injection = pe.ikm - pe.Gseries*(vbusK-vbusM);
-    end
+    function update_ikm(pe,vbusK,vbusM)
+      pe.ikm = pe.injection + pe.Gseries*(vbusK-vbusM); % update ikm
+      if pe.C
+        pe.Vc = pe.Vc + (pe.stepDiv2C) * ( pe.ikm + pe.prev_ikm );
+      end
+    end % update_ikm
   end % methods
 
 end

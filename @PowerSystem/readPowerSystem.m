@@ -239,7 +239,7 @@ function readPowerSystem(ps, file)
     ps.sysInjectionMatrix(ps.sysNumberOfBuses+k,time_idx) = ...
       ps.sysInjectionMatrix(ps.sysNumberOfBuses+k,time_idx) + ps.sysVoltageSources(k).injection;
   end
-  % Add passive element current injections:
+  % TODO Review this!  Add passive element current injections:
   for k=1:length(ps.sysPassiveElements)
     if ps.sysPassiveElements(k).busK % not connected to the ground?
       ps.sysInjectionMatrix(ps.sysPassiveElements(k).busK,time_idx) = ...
@@ -254,20 +254,6 @@ function readPowerSystem(ps, file)
   % Determine variables for initial time:
   ps.sysInvYmodif=inv(ps.sysYmodif);
   ps.sysVariablesMatrix(:,time_idx) = ps.sysInvYmodif * ps.sysInjectionMatrix(:,time_idx);
-  % Set passive elements initial injection value:
-  for k=1:length(ps.sysPassiveElements)
-    if ps.sysPassiveElements(k).busK % not connected to the ground?
-      ps.sysPassiveElements(k).setInitialInjection(...
-        ps.sysVariablesMatrix(ps.sysPassiveElements(k).busK,time_idx), ...
-        ps.sysVariablesMatrix(ps.sysPassiveElements(k).busM,time_idx) ...
-      )
-    else
-      ps.sysPassiveElements(k).setInitialInjection(...
-        0, ...
-        ps.sysVariablesMatrix(ps.sysPassiveElements(k).busM,time_idx) ...
-      )
-    end
-  end
 
   fclose(psFile);
 
