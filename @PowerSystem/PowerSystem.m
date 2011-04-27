@@ -46,63 +46,89 @@ classdef PowerSystem < handle
 %     (Default value for switches = open)
 %   
 % TODO: Update class help
+%
 
   properties(GetAccess = public, SetAccess = private) % Only PowerSystem can set these properties, but everyone can read them
-    sysYmodif = []            %   sysYmodif: Matrix with admitances and nodes connections
-    sysInvYmodif = []         %   sysInvYmodif: Matrix with admitances and nodes connections
-    sysSwitches  = []         %   sysSwitches: Vector containing the system switches
-    sysCurrentSources = []    %   sysCurrentSources: Vector containing the system current sources
-    sysVoltageSources = []    %   sysVoltageSources: Vector containing the system voltage sources
-    sysPassiveElements = []   %   sysPassiveElements: Vector containing the passive elements
-    sysVariablesDescr = {}    %   sysVariablesDescr: Cell array containing the description for the output variables
-    sysStep = 10e-6;          %   sysStep: The time step
-    sysInjectionVector = []   %   sysInjectionVector: Vector containing all bus known (current and voltage) injections
-    sysVariablesVector = []   %   sysVariablesVector: Vector containing all bus variables (current and voltage) injections
-    sysNumberOfBuses = 0;     %   sysNumberOfBuses: Total number of buses in the system
+    sysYmodif = []            %   sysYmodif: Matrix with admitances and nodes connections;
+    sysInvYmodif = []         %   sysInvYmodif: Matrix with admitances and nodes connections;
+    sysSwitches  = []         %   sysSwitches: Vector containing the system switches;
+    sysCurrentSources = []    %   sysCurrentSources: Vector containing the system current sources;
+    sysVoltageSources = []    %   sysVoltageSources: Vector containing the system voltage sources;
+    sysPassiveElements = []   %   sysPassiveElements: Vector containing the passive elements;
+    sysVariablesDescr = {}    %   sysVariablesDescr: Cell array containing the description for the output variables;
+    sysStep = 10e-6;          %   sysStep: The time step;
+    sysInjectionMatrix = []   %   sysInjectionMatrix: Vector containing all bus known (current and voltage) injections;
+    sysVariablesMatrix = []   %   sysVariablesVector: Vector containing all bus variables (current and voltage) injections;
+    sysNumberOfBuses = 0;     %   sysNumberOfBuses: Total number of buses in the system;
+    timeVector                %   timeVector: vector containing all time steps
+  end
+
+  properties( Access = private, Transient )
   end
 
   methods( Access = public )
     function ps = PowerSystem(readFile, step, timeLimit)
-      if nargin > 0
+      if nargin == 3
         ps.sysStep = step;
+        ps.timeVector=0:ps.sysStep:timeLimit;
         ps.readPowerSystem(readFile);
-        ps.sysInvYmodif= inv(ps.sysYmodif);
-        % TODO: Set b vector as annonymous function dependent on sources injections
       else
         error('PowerSystemPkg:PowerSystem','PowerSystem must be initialized with a file.');
       end
     end % Constructor
+
     function run(ps)
-      for t=0:sysStep:timeLimit
-        ps.sysInjectionVector = zeros(1,size(sysYmodif,2));
+      for time_idx=2:length(ps.timeVector)
+        thisTime = ps.timeVector(time_idx);
+        % Fill injection for the current time and update independent sources
         for k=1:length(ps.sysCurrentSources)
-          ps.sysInjectionVector(ps.sysCurrentSources(k).busK) =  ps.sysInjectionVector(ps.sysCurrentSources(k).busK) + ps.sysCurrentSources(k).injection;
-        end
-        %ps.sysInjectionVector(ps.sysNumberOfBuses+1:ps.sysNumberOfBuses+ps.sysVoltageSources(k).busK+1) = ps.sysInjectionVector(ps.sysVoltageSources(k).busK+ps.sysNumberOfBuses) + ps.sysVoltageSources(k).injection;
-        %end
-        for k=1:length(ps.sysPassiveElements)
-          %ps.sysInjectionVector(
-        end
-        ps.sysVariablesVector = ps.sysInjectionVector * ps.sysInjectionVector;
-        % Update Sources
-        for k=1:length(ps.sysCurrentSources)
-          ps.sysCurrentSources(k).update(t)
+          ps.sysInjectionMatrix(ps.sysCurrentSources(k).busK,time_idx) = ... 
+            ps.sysInjectionMatrix(ps.sysCurrentSources(k).busK,time_idx) + ps.sysCurrentSources(k).injection;
+          ps.sysCurrentSources(k).update(thisTime);
         end
         for k=1:length(ps.sysVoltageSources)
-          ps.sysVoltageSources(k).update(t)
+          ps.sysInjectionMatrix(ps.sysNumberOfBuses+k,time_idx) = ...
+            ps.sysInjectionMatrix(ps.sysNumberOfBuses+k,time_idx) + ps.sysVoltageSources(k).injection;
+          ps.sysVoltageSources(k).update(thisTime);
         end
-        %for k=1:length(ps.sysPassiveElements)
-        %  ps.sysPassiveElements(k).update(...
-        %    ps.sysVariablesVector(ps.sysPassiveElements(k).busK),...
-        %    ps.sysVariablesVector(ps.sysPassiveElements(k).busM),...
-        %  );
-        %end
+        % Add passive element current injections:
+        for k=1:length(ps.sysPassiveElements)
+          if ps.sysPassiveElements(k).busK % not connected to the ground?
+            ps.sysInjectionMatrix(ps.sysPassiveElements(k).busK,time_idx) = ...
+              ps.sysInjectionMatrix(ps.sysPassiveElements(k).busK,time_idx) - ps.sysPassiveElements(k).injection; % flow from k to m
+            ps.sysInjectionMatrix(ps.sysPassiveElements(k).busM,time_idx) = ...
+              ps.sysInjectionMatrix(ps.sysPassiveElements(k).busM,time_idx) + ps.sysPassiveElements(k).injection; % flow from k to m
+          else
+            ps.sysInjectionMatrix(ps.sysPassiveElements(k).busM,time_idx) = ...
+              ps.sysInjectionMatrix(ps.sysPassiveElements(k).busM,time_idx) + ps.sysPassiveElements(k).injection; % flow from k to m
+          end
+        end
+        % Determine variables:
+        ps.sysVariablesMatrix(:,time_idx) = ps.sysInvYmodif * ps.sysInjectionMatrix(:,time_idx);
+        % Update Passive Elements:
+        for k=1:length(ps.sysPassiveElements)
+          if ps.sysPassiveElements(k).busK % not connected to the ground?
+            ps.sysPassiveElements(k).update( ...
+              ps.sysVariablesMatrix(ps.sysPassiveElements(k).busK,time_idx), ...
+              ps.sysVariablesMatrix(ps.sysPassiveElements(k).busM,time_idx), ...
+              ps.sysVariablesMatrix(ps.sysPassiveElements(k).busK,time_idx-1), ...
+              ps.sysVariablesMatrix(ps.sysPassiveElements(k).busM,time_idx-1) ...
+            );
+          else
+            ps.sysPassiveElements(k).update( ...
+              0, ...
+              ps.sysVariablesMatrix(ps.sysPassiveElements(k).busM,time_idx), ...
+              0, ...
+              ps.sysVariablesMatrix(ps.sysPassiveElements(k).busM,time_idx-1) ...
+            );
+          end
+        end
       end
     end % function run
   end % public methods
 
   methods( Access = private )
-    readPowerSystem(ps,file) % see readPowerSystem
+    readPowerSystem(ps,file) % see readPowerSystem.m
     function updateSwitch(ps,src)
       swichIdx = find( ps.sysSwitches == src );
       if src.isOpen

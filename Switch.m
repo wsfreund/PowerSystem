@@ -10,6 +10,8 @@ classdef Switch < handle
 %    busM: defines second bus connection from the switch
 %    status: defines switch initial status. It must be a SwitchStatus object: SwitchStatus.Open/Closed (default Open)
 %
+% TODO: update functions
+%
 
   properties(GetAccess = public, SetAccess = private) % Only Switch can set these properties, but everyone can read them
     busK = 0;                     % bus1: System first Switch connection

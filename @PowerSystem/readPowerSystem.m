@@ -39,11 +39,11 @@ function readPowerSystem(ps, file)
         continue;
       end
       lastWord = textscan(tLine,'%*s %*s %*f64 %s');
-      if isempty(lastWord{1})
-        tCurrentSource = Source(firstBUS, SourceTypes.Current,'sinoidal',tCurrent);
+      if isempty(lastWord{1}) || strcmp(lastWord{1}{1},'STEP')
+        tCurrentSource = Source(firstBUS, SourceTypes.Current,'step',tCurrent);
         ps.sysCurrentSources = [ps.sysCurrentSources; tCurrentSource];
-      elseif strcmp(lastWord{1}{1},'SINOIDAL') || strcmp(lastWord{1}{1},'STEP')
-        tCurrentSource = Source(firstBUS, SourceTypes.Current,lower(lastWord{1}{1}),tCurrent);
+      elseif strcmp(lastWord{1}{1},'SINOIDAL') 
+        tCurrentSource = Source(firstBUS, SourceTypes.Current,'sinoidal',tCurrent);
         ps.sysCurrentSources = [ps.sysCurrentSources; tCurrentSource];
       else
         display(sprintf('IGNORING BADLY FORMATED LINE NUMBER %d', lineC ));
@@ -59,8 +59,16 @@ function readPowerSystem(ps, file)
         lineC = lineC + 1;
         continue;
       end
-      tVoltageSource = Source(firstBUS, SourceTypes.Voltage,'sinoidal',tVoltage);
-      ps.sysVoltageSources = [ps.sysVoltageSources; tVoltageSource];
+      lastWord = textscan(tLine,'%*s %*s %*f64 %s');
+      if isempty(lastWord{1}) || strcmp(lastWord{1}{1},'STEP')
+        tVoltageSource = Source(firstBUS, SourceTypes.Voltage,'step',tVoltage);
+        ps.sysVoltageSources = [ps.sysVoltageSources; tVoltageSource];
+      elseif strcmp(lastWord{1}{1},'SINOIDAL')
+        tVoltageSource = Source(firstBUS,SourceTypes.Voltage,'sinoidal',tVoltage);
+        ps.sysVoltageSources = [ps.sysVoltageSources; tVoltageSource];
+      else
+        display(sprintf('IGNORING BADLY FORMATED LINE NUMBER %d', lineC ));
+      end
       tLine = fgetl(psFile);
       lineC = lineC + 1;
       continue;
@@ -213,6 +221,52 @@ function readPowerSystem(ps, file)
       ps.sysYmodif(ps.sysSwitches(k).busM,ps.sysNumberOfBuses+svSize+k) = 1;
     end
     ps.sysVariablesDescr(ps.sysNumberOfBuses+svSize+k) = {sprintf('CURRENT ON SWITCH %d-%d',ps.sysSwitches(k).busK,ps.sysSwitches(k).busM)};
+  end
+
+  % Initialize:
+  ps.sysInjectionMatrix = zeros(size(ps.sysYmodif,2),length(ps.timeVector));
+  ps.sysVariablesMatrix = zeros(size(ps.sysYmodif,2),length(ps.timeVector));
+  time_idx = 1;
+  thisTime = ps.timeVector(time_idx);
+  % Fill injection for initial time
+  for k=1:length(ps.sysCurrentSources)
+    ps.sysCurrentSources(k).update(thisTime);
+    ps.sysInjectionMatrix(ps.sysCurrentSources(k).busK,time_idx) = ... 
+      ps.sysInjectionMatrix(ps.sysCurrentSources(k).busK,time_idx) + ps.sysCurrentSources(k).injection;
+  end
+  for k=1:length(ps.sysVoltageSources)
+    ps.sysVoltageSources(k).update(thisTime);
+    ps.sysInjectionMatrix(ps.sysNumberOfBuses+k,time_idx) = ...
+      ps.sysInjectionMatrix(ps.sysNumberOfBuses+k,time_idx) + ps.sysVoltageSources(k).injection;
+  end
+  % Add passive element current injections:
+  for k=1:length(ps.sysPassiveElements)
+    if ps.sysPassiveElements(k).busK % not connected to the ground?
+      ps.sysInjectionMatrix(ps.sysPassiveElements(k).busK,time_idx) = ...
+        ps.sysInjectionMatrix(ps.sysPassiveElements(k).busK,time_idx) - ps.sysPassiveElements(k).injection; % flow from k to m
+      ps.sysInjectionMatrix(ps.sysPassiveElements(k).busM,time_idx) = ...
+        ps.sysInjectionMatrix(ps.sysPassiveElements(k).busM,time_idx) + ps.sysPassiveElements(k).injection; % flow from k to m
+    else
+      ps.sysInjectionMatrix(ps.sysPassiveElements(k).busM,time_idx) = ...
+        ps.sysInjectionMatrix(ps.sysPassiveElements(k).busM,time_idx) + ps.sysPassiveElements(k).injection; % flow from k to m
+    end
+  end
+  % Determine variables for initial time:
+  ps.sysInvYmodif=inv(ps.sysYmodif);
+  ps.sysVariablesMatrix(:,time_idx) = ps.sysInvYmodif * ps.sysInjectionMatrix(:,time_idx);
+  % Set passive elements initial injection value:
+  for k=1:length(ps.sysPassiveElements)
+    if ps.sysPassiveElements(k).busK % not connected to the ground?
+      ps.sysPassiveElements(k).setInitialInjection(...
+        ps.sysVariablesMatrix(ps.sysPassiveElements(k).busK,time_idx), ...
+        ps.sysVariablesMatrix(ps.sysPassiveElements(k).busM,time_idx) ...
+      )
+    else
+      ps.sysPassiveElements(k).setInitialInjection(...
+        0, ...
+        ps.sysVariablesMatrix(ps.sysPassiveElements(k).busM,time_idx) ...
+      )
+    end
   end
 
   fclose(psFile);

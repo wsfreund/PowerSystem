@@ -17,6 +17,8 @@ classdef Source < handle
 %     phase: Phase For wave forms only 
 %     frequency: Frequency For wave forms only 
 %
+% TODO: update functions
+%
 
   properties(Access = public) % Use these parameters to control sinoidal amp/freq/phase or step amp values.
     freq = 60.;                                 % freq: The source frequency;
