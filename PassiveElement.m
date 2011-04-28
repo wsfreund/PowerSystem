@@ -5,7 +5,7 @@ classdef PassiveElement < handle & Source
 %
 %   Its constructor is defined as following:
 %
-%    PassiveElement(step,busK,busM,R,L,C,initial_injection)
+%    PassiveElement(step,busK,busM,R,L,C)
 %
 %     step: system time step
 %     busK: Current incoming BUS 
@@ -13,9 +13,7 @@ classdef PassiveElement < handle & Source
 %     R: PassiveElement Resistence
 %     L: PassiveElement Inductance
 %     C: PassiveElement Capacitance
-%     initial_injection: Source initial injection (if any passive element was charged)
 %
-% TODO: update functions
 
   properties(GetAccess = public, SetAccess = private) % Only I can set these properties, but everyone can read them
     Gseries = 0.;                               % Gseries: Total admitance for Passive Element;
@@ -35,7 +33,7 @@ classdef PassiveElement < handle & Source
   end
 
   methods
-    function pe = PassiveElement(step,busK,busM,R,L,C,initial_ikm)
+    function pe = PassiveElement(step,busK,busM,R,L,C)
       if ( (nargin < 5) && (nargin > 0) ) % It is not possible to initialize without at least 5 arguments.
         error('PowerSystemPkg:PassiveElement', 'You must specify at least 5 args to construct a PassiveElement PassiveElement(ps,bus1,bus2,R,L,C,initial_injection)');
       end
@@ -47,9 +45,6 @@ classdef PassiveElement < handle & Source
         pe.busM = busM;
       end
       if nargin > 3
-        if nargin == 6
-          initial_ikm = 0.;
-        end
         if nargin == 5
           C = 0.;
         end
@@ -60,7 +55,6 @@ classdef PassiveElement < handle & Source
         if C
           pe.stepDiv2C= step/(2*C);
         end
-        pe.ikm = initial_ikm;
         if ( C ~= 0 ) % With Capacitor:
           pe.Gseries = 1 / (pe.R + pe.L2DivStep + pe.stepDiv2C);
           pe.injection_function = @( prev_ikm, prev_vbusK, prev_vbusM ) ...
@@ -75,6 +69,14 @@ classdef PassiveElement < handle & Source
     end % Constructor
 
     function update_injection(pe,prev_vbusK,prev_vbusM)
+%    function update_injection(pe,prev_vbusK,prev_vbusM)
+%
+%     This function is used to update the Passive Element historical current injection
+%       
+%   Inputs:
+%     prev_vbusK: previous voltage on bus K;
+%     prev_vbusM: previous voltage on bus M;
+%
       pe.prev_ikm = pe.ikm; % save previous ikm
       % Update injection
       if pe.C
@@ -83,7 +85,17 @@ classdef PassiveElement < handle & Source
         pe.injection = pe.injection_function(pe.prev_ikm,prev_vbusK,prev_vbusM); % Update source injection (hist current)
       end
     end % update
+
     function update_ikm(pe,vbusK,vbusM)
+%    function update_ikm(pe,vbusK,vbusM)
+%
+%     This function is used to update the Passive Element total current flowing from bus K to M.
+%   If the Passive Element contains a capacitor it also updates the capacitor voltage.
+%       
+%   Inputs:
+%     vbusK: voltage on bus K;
+%     vbusM: voltage on bus M;
+%
       pe.ikm = pe.injection + pe.Gseries*(vbusK-vbusM); % update ikm
       if pe.C
         pe.Vc = pe.Vc + (pe.stepDiv2C) * ( pe.ikm + pe.prev_ikm );

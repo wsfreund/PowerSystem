@@ -40,10 +40,10 @@ function readPowerSystem(ps, file)
       end
       lastWord = textscan(tLine,'%*s %*s %*f64 %s');
       if isempty(lastWord{1}) || strcmp(lastWord{1}{1},'STEP')
-        tCurrentSource = Source(firstBUS, SourceTypes.Current,'step',tCurrent);
+        tCurrentSource = RampSource(firstBUS, SourceTypes.Current,'step',tCurrent);
         ps.sysCurrentSources = [ps.sysCurrentSources; tCurrentSource];
       elseif strcmp(lastWord{1}{1},'SINOIDAL') 
-        tCurrentSource = Source(firstBUS, SourceTypes.Current,'sinoidal',tCurrent);
+        tCurrentSource = RampSource(firstBUS, SourceTypes.Current,'sinoidal',tCurrent);
         ps.sysCurrentSources = [ps.sysCurrentSources; tCurrentSource];
       else
         display(sprintf('IGNORING BADLY FORMATED LINE NUMBER %d', lineC ));
@@ -61,10 +61,10 @@ function readPowerSystem(ps, file)
       end
       lastWord = textscan(tLine,'%*s %*s %*f64 %s');
       if isempty(lastWord{1}) || strcmp(lastWord{1}{1},'STEP')
-        tVoltageSource = Source(firstBUS, SourceTypes.Voltage,'step',tVoltage);
+        tVoltageSource = RampSource(firstBUS, SourceTypes.Voltage,'step',tVoltage);
         ps.sysVoltageSources = [ps.sysVoltageSources; tVoltageSource];
       elseif strcmp(lastWord{1}{1},'SINOIDAL')
-        tVoltageSource = Source(firstBUS,SourceTypes.Voltage,'sinoidal',tVoltage);
+        tVoltageSource = RampSource(firstBUS,SourceTypes.Voltage,'sinoidal',tVoltage);
         ps.sysVoltageSources = [ps.sysVoltageSources; tVoltageSource];
       else
         display(sprintf('IGNORING BADLY FORMATED LINE NUMBER %d', lineC ));
@@ -119,6 +119,9 @@ function readPowerSystem(ps, file)
     % Capacitance is supposed to be the fifth word
     if (~isempty(tWords{5}))
       tCapacitance = 1/(2*pi*60*tWords{5});% Inputs should be on frequency domain
+    end
+    if isempty(ps.sysYmodif)
+      ps.sysYmodif(secondBUS,secondBUS) = 0;
     end
     if (firstBUS == 0) % Shunt element
       if (tInductance ~= 0 || tCapacitance ~= 0)
@@ -201,7 +204,9 @@ function readPowerSystem(ps, file)
   sswitchSize = length(ps.sysSwitches);
 
   % Expand matrix
-  ps.sysYmodif(end+svSize+sswitchSize,end+svSize+sswitchSize)=0; 
+  if ( svSize + sswitchSize )
+    ps.sysYmodif(end+svSize+sswitchSize,end+svSize+sswitchSize)=0; 
+  end
 
   % Fill sV
   for k=1:length(ps.sysVoltageSources)
