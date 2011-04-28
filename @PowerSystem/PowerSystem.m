@@ -11,7 +11,7 @@ classdef PowerSystem < handle
 %
 %   readFile: ASCII format file used to build the Power System. 
 %
-%       One line for each element, if there are more than two elements in a line, 
+%       One line for each element, if there are more than two elements in a line 
 %       will cause either the second element or the whole line to be ignored. 
 %
 %       Words should always be separated by space and on CAPITAL LETTERS.
