@@ -218,12 +218,12 @@ function readPowerSystem(ps, file)
   % Fill sSwitch
   for k=1:length(ps.sysSwitches)
     if ( ps.sysSwitches(k).status == SwitchStatus.Closed)
-      ps.sysYmodif(ps.sysNumberOfBuses+svSize+k,ps.sysNumberOfBuses+svSize+k) = 1;
-    else
       ps.sysYmodif(ps.sysNumberOfBuses+svSize+k,ps.sysSwitches(k).busK) = 1;
       ps.sysYmodif(ps.sysNumberOfBuses+svSize+k,ps.sysSwitches(k).busM) = -1;
       ps.sysYmodif(ps.sysSwitches(k).busK,ps.sysNumberOfBuses+svSize+k) = 1;
       ps.sysYmodif(ps.sysSwitches(k).busM,ps.sysNumberOfBuses+svSize+k) = -1;
+    else
+      ps.sysYmodif(ps.sysNumberOfBuses+svSize+k,ps.sysNumberOfBuses+svSize+k) = 1;
     end
     ps.sysVariablesDescr(ps.sysNumberOfBuses+svSize+k) = {sprintf('CURRENT ON SWITCH %d-%d',ps.sysSwitches(k).busK,ps.sysSwitches(k).busM)};
   end
