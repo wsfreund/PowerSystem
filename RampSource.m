@@ -16,7 +16,7 @@ classdef RampSource < Source
   methods
     function src = RampSource( busK, type, signal_type, maxAmp, phase, frequency, riseTime );
       if nargin < 4
-        error('PowerSystemPkg:RampSource','RampSource must be initialized with at least arguments.');
+        error('PowerSystemPkg:RampSource','RampSource must be initialized with at least 4 arguments.');
       end
       if nargin < 5
         phase = 0.;

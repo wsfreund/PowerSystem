@@ -93,7 +93,7 @@ function readPowerSystem(ps, file)
         if (firstBUS == 0) % it shouldnt be a switch to the ground... as far as I know.
           display(sprintf('IGNORING BADLY FORMATED LINE NUMBER %d', lineC ));
         end
-        if ~isempty(tWords{2}) && strfind(tWords{2}{1},'CLOSE')
+        if ~isempty(tWords{2}) && ~isempty(strfind(tWords{2}{1},'CLOSE'))
           tSwitch = Switch(firstBUS,secondBUS,SwitchStatus.Closed);
           ps.sysSwitches = [ps.sysSwitches; tSwitch];
           addlistener(tSwitch,'NewPosition',@ps.updateSwitch);

@@ -56,7 +56,7 @@ classdef PowerSystem < handle
     sysVariablesDescr = {}    %   sysVariablesDescr: Cell array containing the description for the output variables;
     sysStep = 10e-6;          %   sysStep: The time step;
     sysInjectionMatrix = []   %   sysInjectionMatrix: Vector containing all bus known (current and voltage) injections;
-    sysVariablesMatrix = []   %   sysVariablesVector: Vector containing all bus variables (current and voltage) injections;
+    sysVariablesMatrix = []   %   sysVariablesMatrix: Vector containing all bus variables (current and voltage) injections;
     sysNumberOfBuses = 0;     %   sysNumberOfBuses: Total number of buses in the system;
     timeVector                %   timeVector: vector containing all time steps
   end
@@ -74,26 +74,74 @@ classdef PowerSystem < handle
 
     run(ps) % see @PowerSystem/run.m
 
+    function plot_bars(ps,bars)
+      if nargin == 1
+        bars = 1:ps.sysNumberOfBuses;
+      end
+      for k=bars
+        figure
+        hold on;
+        plot(ps.timeVector,ps.sysInjectionMatrix(k,:));
+        plot(ps.timeVector,ps.sysVariablesMatrix(k,:),'r');
+        legend('Current', 'Voltage');
+        title(sprintf('BUS %d',k),'FontSize',20)
+        xlabel('Time (s)','FontSize',20);
+        ylabel('Injections (V,A)','FontSize',20);
+        set(gca,'FontSize',16);
+        set(gcf,'Color','w');
+        grid
+      end
+    end % plot_bars
+
+    function plot_switches(ps,switches)
+      if nargin == 1
+        switches = (ps.sysNumberOfBuses+length(ps.sysVoltageSources)+1):(ps.sysNumberOfBuses+length(ps.sysVoltageSources)+length(ps.sysSwitches));
+      else
+        switches = switches + (ps.sysNumberOfBuses+length(ps.sysVoltageSources));
+      end
+      for k=switches
+        figure
+        hold on;
+        plot(ps.timeVector,ps.sysVariablesMatrix(k,:));
+        title(sprintf('SWITCH BUS %d to %d', ps.sysSwitches(k-(ps.sysNumberOfBuses+length(ps.sysVoltageSources))).busK, ps.sysSwitches(k-(ps.sysNumberOfBuses+length(ps.sysVoltageSources))).busM),'FontSize',20);
+        xlabel('Time (s)','FontSize',20);
+        ylabel('Current on Switch (A)','FontSize',20);
+        set(gca,'FontSize',16);
+        set(gcf,'Color','w');
+        grid
+      end
+    end % plot_switches
+
+    function plot_system(ps)
+      ps.plot_bars
+      ps.plot_switches
+    end % plot_system
+
   end % public methods
 
   methods( Access = private )
-    readPowerSystem(ps,file) % see @PowerSystem/readPowerSystem.m
-    function updateSwitch(ps,src)
-      swichIdx = find( ps.sysSwitches == src );
+    function updateSwitch(ps,src,evtdata)
+      swichIdx = find( ps.sysSwitches == src ) + (ps.sysNumberOfBuses+length(ps.sysVoltageSources));
       if src.isOpen
-        tempLine = zeros(1,ps.sysNumberOfBuses);
-        tempLine(switchIdx) = 1;
-        ps.sysYmodif(switchIdx,:) = tempLine;
+        tempLine = zeros(1,ps.sysNumberOfBuses+length(ps.sysVoltageSources)++length(ps.sysSwitches));
+        tempLine(swichIdx) = 1;
+        ps.sysYmodif(swichIdx,:) = tempLine;
+        ps.sysYmodif(:,swichIdx) = tempLine';
         ps.sysInvYmodif = inv(ps.sysYmodif);
       else
-        tempLine = zeros(1,ps.sysNumberOfBuses);
+        tempLine = zeros(1,ps.sysNumberOfBuses+length(ps.sysVoltageSources)++length(ps.sysSwitches));
         tempLine(src.busK) = 1;
         tempLine(src.busM) = -1;
-        ps.sysYmodif(switchIdx,:) = tempLine;
+        ps.sysYmodif(swichIdx,:) = tempLine;
+        ps.sysYmodif(:,swichIdx) = tempLine';
         ps.sysInvYmodif = inv(ps.sysYmodif);
       end
     end % updateSwitch
+    readPowerSystem(ps,file) % see @PowerSystem/readPowerSystem.m
   end % private methods
+
+  methods( Access = private, Static )
+  end % private and Static methods
 
 end
 

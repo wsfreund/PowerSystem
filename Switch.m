@@ -17,6 +17,10 @@ classdef Switch < handle
     status = SwitchStatus.Open;   % status: The switch status
   end
 
+  events
+    NewPosition
+  end
+
   methods
     function sw = Switch(busK, busM, status)
       if nargin > 0
@@ -77,10 +81,6 @@ classdef Switch < handle
     end % function changePosition
 
   end % methods
-
-  events
-    NewPosition
-  end
 
 end
 
