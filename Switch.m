@@ -1,4 +1,4 @@
-classdef Switch < handle
+classdef Switch < handle & dynamicprops
 %
 %   Switch class is implemented for the PowerSystem Package and it's 
 %     used for all switches on the circuit.
@@ -15,6 +15,11 @@ classdef Switch < handle
     busK = 0;                     % bus1: System first Switch connection
     busM = 0;                     % bus2: System second Switch connection
     status = SwitchStatus.Open;   % status: The switch status
+  end
+
+  properties(Access = private)
+    timeListeners                 % timeListeners: Switch time change Listeners
+    timedChanges                  % timedChanges: Switch changing Times
   end
 
   events
@@ -80,7 +85,35 @@ classdef Switch < handle
       end
     end % function changePosition
 
+    function addTimedChange(sw, ps, time)
+      if ps.currentTime < time % We will change the time only if it hasnt passed
+        sw.timedChanges = [time, sw.timedChanges];
+        [sw.timedChanges, idx] = sort(sw.timedChanges);
+        if (isempty(sw.findprop('timeListener'))) % We need to add a listener to the PowerSystem time
+          sw.addprop('timeListener'); % add a property so that we can reach the listener and delete it when it is not necessary anymore
+          sw.timeListener = addlistener(ps,'currentTime','PostSet',@sw.changeOnTime);
+        end
+      else
+        display(sprintf('ATTEMPTED TO SET A SWITCH CHANGE ON SYSTEM PAST TIME %f, POWER SYSTEM CURRENT TIME IS %f', time, ps.currentTime));
+      end
+    end % addTimedChange
   end % methods
+
+  methods (Access = private)
+    function changeOnTime(sw, src, evt)
+      if ( sw.timedChanges(1) <= evt.AffectedObject.currentTime)
+        sw.changePosition
+        if (length(sw.timedChanges)>1) % Is there more timed changes?
+          sw.timedChanges = sw.timedChanges(2:end); % Update them
+        else % otherwise
+          sw.timedChanges = []; % clear timedChanges
+          delete(sw.timeListener); % delete listener
+          delete(sw.findprop('timeListener')); % delete listener property
+        end
+      end
+    end
+  end % private methods
+
 
 end
 

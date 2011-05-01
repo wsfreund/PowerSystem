@@ -1,9 +1,21 @@
-function run(ps)
-% function run(ps)
-%   This function runs the PowerSystem.
+function run(ps, timeLimit)
+% function run(ps,timeLimit)
+%   This function runs the PowerSystem until timeLimit variable is reached. If timeLimit not specified it will run for 100ms.
 
-  for time_idx=2:length(ps.timeVector)
-    thisTime = ps.timeVector(time_idx);
+  if nargin == 1
+    timeLimit = 0.1;
+  end
+
+  if ps.timeVector(end) >= timeLimit
+    error('PowerSystemPkg:PowerSystem.run','Power System has already run until this time limit');
+  end
+  ps.timeVector=0:ps.sysStep:timeLimit;
+  first_idx = find(ps.timeVector == ps.currentTime) + 1;
+  % Reserve memory:
+  ps.sysInjectionMatrix = [ps.sysInjectionMatrix zeros(size(ps.sysYmodif,2),length(ps.timeVector)-(first_idx-1))];
+  ps.sysVariablesMatrix = [ps.sysVariablesMatrix zeros(size(ps.sysYmodif,2),length(ps.timeVector)-(first_idx-1))];
+  for time_idx=first_idx:length(ps.timeVector)
+    ps.currentTime = ps.timeVector(time_idx);
     % Update Passive Elements Injection:
     for k=1:length(ps.sysPassiveElements)
       if ps.sysPassiveElements(k).busK % not connected to the ground?
@@ -22,12 +34,12 @@ function run(ps)
     for k=1:length(ps.sysCurrentSources)
       ps.sysInjectionMatrix(ps.sysCurrentSources(k).busK,time_idx) = ... 
         ps.sysInjectionMatrix(ps.sysCurrentSources(k).busK,time_idx) + ps.sysCurrentSources(k).injection;
-      ps.sysCurrentSources(k).update(thisTime);
+      ps.sysCurrentSources(k).update(ps.currentTime);
     end
     for k=1:length(ps.sysVoltageSources)
       ps.sysInjectionMatrix(ps.sysNumberOfBuses+k,time_idx) = ...
         ps.sysInjectionMatrix(ps.sysNumberOfBuses+k,time_idx) + ps.sysVoltageSources(k).injection;
-      ps.sysVoltageSources(k).update(thisTime);
+      ps.sysVoltageSources(k).update(ps.currentTime);
     end
     % Add passive element current injections:
     for k=1:length(ps.sysPassiveElements)

@@ -17,11 +17,52 @@ function readPowerSystem(ps, file)
       lineC = lineC + 1;
       continue;
     end
+    % Ignore comment lines (started with %)
+    if strcmp(tWords{1}{1}(1),'%')
+      tLine = fgetl(psFile);
+      lineC = lineC + 1;
+      continue;
+    end
     if strfind(tWords{1}{1},'BUS')
       firstBUS = strread(tWords{1}{1},'BUS %d');
-    elseif strfind(tWords{1}{1},'GROUND')
+    elseif strcmp(tWords{1}{1},'GROUND')
       firstBUS = strread(tWords{2}{1},'BUS %d');
       secondBUS = firstBUS;
+    elseif strcmp(tWords{1}{1},'TIMED_EVENT')
+      [tWords] = textscan(tLine,'%*s %f64 %s');
+      tEventTime = tWords{1};
+      if strcmp(tWords{2}{1},'SWITCH')
+        [tWords] = textscan(tLine,'%*s %*f64 %*s %s %s');
+        firstBUS = strread(tWords{1}{1},'BUS %d');
+        secondBUS = strread(tWords{2}{1},'BUS %d');
+        % I want the second BUS index always lesser than firstBUS (is this necessary?)
+        if (firstBUS > secondBUS)
+          temp = firstBUS;
+          firstBUS = secondBUS;
+          secondBUS = temp;
+        end
+        if ( ( firstBUS<0 || secondBUS<0 ) ) % Did someone write on the file any negative index? 
+          display(sprintf('IGNORING BADLY FORMATED LINE NUMBER %d', lineC ));
+          tLine = fgetl(psFile);
+          lineC = lineC + 1;
+          continue;
+        end
+        switchIdx = find( [ps.sysSwitches.busK] == firstBUS);
+        if ~isempty(switchIdx)
+          switchIdx = find( [ps.sysSwitches(switchIdx).busM] == secondBUS);
+        end
+        if ~isempty(switchIdx)
+          ps.sysSwitches(switchIdx).addTimedChange(ps,tEventTime);
+          tLine = fgetl(psFile);
+          lineC = lineC + 1;
+          continue;
+        else
+          display(sprintf('COULD NOT FIND SWITCH FROM TIMED_EVENT ON LINE NUMBER %d', lineC ));
+          tLine = fgetl(psFile);
+          lineC = lineC + 1;
+          continue;
+        end
+      end
     end
     % Search for second BUS info
     if strfind(tWords{2}{1},'BUS')
@@ -227,38 +268,6 @@ function readPowerSystem(ps, file)
     end
     ps.sysVariablesDescr(ps.sysNumberOfBuses+svSize+k) = {sprintf('CURRENT ON SWITCH %d-%d',ps.sysSwitches(k).busK,ps.sysSwitches(k).busM)};
   end
-
-  % Initialize:
-  ps.sysInjectionMatrix = zeros(size(ps.sysYmodif,2),length(ps.timeVector));
-  ps.sysVariablesMatrix = zeros(size(ps.sysYmodif,2),length(ps.timeVector));
-  time_idx = 1;
-  thisTime = ps.timeVector(time_idx);
-  % Fill injection for initial time
-  for k=1:length(ps.sysCurrentSources)
-    ps.sysCurrentSources(k).update(thisTime);
-    ps.sysInjectionMatrix(ps.sysCurrentSources(k).busK,time_idx) = ... 
-      ps.sysInjectionMatrix(ps.sysCurrentSources(k).busK,time_idx) + ps.sysCurrentSources(k).injection;
-  end
-  for k=1:length(ps.sysVoltageSources)
-    ps.sysVoltageSources(k).update(thisTime);
-    ps.sysInjectionMatrix(ps.sysNumberOfBuses+k,time_idx) = ...
-      ps.sysInjectionMatrix(ps.sysNumberOfBuses+k,time_idx) + ps.sysVoltageSources(k).injection;
-  end
-  % TODO Review this!  Add passive element current injections:
-  for k=1:length(ps.sysPassiveElements)
-    if ps.sysPassiveElements(k).busK % not connected to the ground?
-      ps.sysInjectionMatrix(ps.sysPassiveElements(k).busK,time_idx) = ...
-        ps.sysInjectionMatrix(ps.sysPassiveElements(k).busK,time_idx) - ps.sysPassiveElements(k).injection; % flow from k to m
-      ps.sysInjectionMatrix(ps.sysPassiveElements(k).busM,time_idx) = ...
-        ps.sysInjectionMatrix(ps.sysPassiveElements(k).busM,time_idx) + ps.sysPassiveElements(k).injection; % flow from k to m
-    else
-      ps.sysInjectionMatrix(ps.sysPassiveElements(k).busM,time_idx) = ...
-        ps.sysInjectionMatrix(ps.sysPassiveElements(k).busM,time_idx) + ps.sysPassiveElements(k).injection; % flow from k to m
-    end
-  end
-  % Determine variables for initial time:
-  ps.sysInvYmodif=inv(ps.sysYmodif);
-  ps.sysVariablesMatrix(:,time_idx) = ps.sysInvYmodif * ps.sysInjectionMatrix(:,time_idx);
 
   fclose(psFile);
 

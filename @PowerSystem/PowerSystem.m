@@ -30,6 +30,8 @@ classdef PowerSystem < handle
 %
 %       - TODO: Transmission line
 %
+% Use PowerSystem.run(timeLimit) to run the PowerSystem until timeLimit
+%
 %     example:
 %     BUS1 BUS6 6e-3
 %     BUS1 CURRENT 1 STEP
@@ -58,21 +60,44 @@ classdef PowerSystem < handle
     sysInjectionMatrix = []   %   sysInjectionMatrix: Vector containing all bus known (current and voltage) injections;
     sysVariablesMatrix = []   %   sysVariablesMatrix: Vector containing all bus variables (current and voltage) injections;
     sysNumberOfBuses = 0;     %   sysNumberOfBuses: Total number of buses in the system;
-    timeVector                %   timeVector: vector containing all time steps
+    timeVector                %   timeVector: vector containing all time steps;
+  end
+
+  properties(GetAccess = public, SetAccess = private, SetObservable) % Only PowerSystem can set these properties, but everyone can read them. It is observable
+    currentTime = 0;          %   currentTime: the power system current time;
   end
 
   methods( Access = public )
-    function ps = PowerSystem(readFile, step, timeLimit)
-      if nargin == 3
+    function ps = PowerSystem(readFile, step)
+      if nargin == 2
         ps.sysStep = step;
-        ps.timeVector=0:ps.sysStep:timeLimit;
+        % Read and fill the powerSystem:
         ps.readPowerSystem(readFile);
+        % And then Initialize:
+        ps.sysInjectionMatrix = zeros(size(ps.sysYmodif,2),1);
+        ps.sysVariablesMatrix = zeros(size(ps.sysYmodif,2),1);
+        ps.currentTime = 0;
+        ps.timeVector = 0;
+        % Fill injection for initial time
+        for k=1:length(ps.sysCurrentSources)
+          ps.sysCurrentSources(k).update(ps.currentTime);
+          ps.sysInjectionMatrix(ps.sysCurrentSources(k).busK,1) = ... 
+            ps.sysInjectionMatrix(ps.sysCurrentSources(k).busK,1) + ps.sysCurrentSources(k).injection;
+        end
+        for k=1:length(ps.sysVoltageSources)
+          ps.sysVoltageSources(k).update(ps.currentTime);
+          ps.sysInjectionMatrix(ps.sysNumberOfBuses+k,1) = ...
+            ps.sysInjectionMatrix(ps.sysNumberOfBuses+k,1) + ps.sysVoltageSources(k).injection;
+        end
+        % Determine variables for initial time:
+        ps.sysInvYmodif=inv(ps.sysYmodif);
+        ps.sysVariablesMatrix(:,1) = ps.sysInvYmodif * ps.sysInjectionMatrix(:,1);
       else
-        error('PowerSystemPkg:PowerSystem','PowerSystem must be initialized with a file.');
+        error('PowerSystemPkg:PowerSystem','PowerSystem must be initialized with a file and its step: PowerSystem(readFile, step).');
       end
     end % Constructor
 
-    run(ps) % see @PowerSystem/run.m
+    run(ps, timeLimit) % see @PowerSystem/run.m
 
     function plot_bars(ps,bars)
       if nargin == 1
