@@ -18,7 +18,6 @@ classdef Switch < handle & dynamicprops
   end
 
   properties(Access = private)
-    timeListeners                 % timeListeners: Switch time change Listeners
     timedChanges                  % timedChanges: Switch changing Times
   end
 

@@ -79,11 +79,7 @@ classdef PassiveElement < handle & Source
 %
       pe.prev_ikm = pe.ikm; % save previous ikm
       % Update injection
-      if pe.C
-        pe.injection = pe.injection_function(pe.prev_ikm,prev_vbusK,prev_vbusM); % Update source injection (hist current)
-      else
-        pe.injection = pe.injection_function(pe.prev_ikm,prev_vbusK,prev_vbusM); % Update source injection (hist current)
-      end
+      pe.injection = pe.injection_function(pe.prev_ikm,prev_vbusK,prev_vbusM); % Update source injection (hist current)
     end % update
 
     function update_ikm(pe,vbusK,vbusM)
