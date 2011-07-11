@@ -51,7 +51,7 @@ function readPowerSystem(ps, file)
       continue;
     end
     % Here tWords is an cell array containing two strings and 3 doubles. See textscan help.
-    [tWords] = textscan(tLine,'%s %s %f64 %f64 %f64');
+    [tWords] = textscan(tLine,'%s %s %f64 %f64 %f64 %f64 %f64 %f64 %f64 %f64 %f64');
     if isempty(tWords{2}) || isempty(tWords{1})
       display(sprintf('IGNORING BADLY FORMATED LINE NUMBER %d:', lineC ));
       disp(tLine)
@@ -207,7 +207,7 @@ function readPowerSystem(ps, file)
       continue;
     end
     % Resistence is supposed to be the third word
-    tResistence = tWords{3};
+    tResistence = [tWords{3}; tWords{6}; tWords{9}];
     if (isempty(tResistence)) % Third word is not a double! Let's try reading it as a string.
       tWords = textscan(tLine,'%*s %*s %s %s'); % read third and fourth word as strings, ignoring first and second words.
       if strcmp(tWords{1}{1},'SWITCH') % is third word SWITCH?
@@ -237,17 +237,18 @@ function readPowerSystem(ps, file)
     tCapacitance = 0.;
     % Inductance is supposed to be the forth word
     if (~isempty(tWords{4}))
-      tInductance = tWords{4}/(2*pi*60); % Inputs should be on frequency domain
+      tInductance = [tWords{4}; tWords{7}; tWords{10}]/(2*pi*60); % Inputs should be on frequency domain;
     end
     % Capacitance is supposed to be the fifth word
     if (~isempty(tWords{5}))
-      tCapacitance = 1/(2*pi*60*tWords{5});% Inputs should be on frequency domain
+      tCapacitance = 1./(2*pi*[tWords{5}; tWords{8}; tWords{11}]);% Inputs should be on frequency domain
+      tCapacitance(tCapacitance==inf)=0;
     end
     if isempty(ps.sysYmodif)
       ps.sysYmodif(secondBUS,secondBUS) = 0;
     end
     if (firstBUS == 0) % Shunt element
-      if (tInductance ~= 0 || tCapacitance ~= 0)
+      if (~isempty(tInductance) || ~isempty(tCapacitance))
         tPassiveElement = PassiveElement(ps,firstBUS,secondBUS,tResistence,tInductance,tCapacitance);
         ps.sysYmodif(...
           ps.topology*(secondBUS-1)+1:ps.topology*(secondBUS-1)+ps.topology,...
@@ -267,7 +268,7 @@ function readPowerSystem(ps, file)
         ) + diag(1/tResistence);
       end
     else % firstBUS to secondBUS connection
-      if (tInductance ~= 0 || tCapacitance ~= 0)
+      if (~isempty(tInductance) || ~isempty(tCapacitance))
         tPassiveElement = PassiveElement(ps,firstBUS,secondBUS,tResistence,tInductance,tCapacitance);
         ps.sysYmodif(... % k,m
           ps.topology*(firstBUS-1)+1:ps.topology*(firstBUS-1)+ps.topology,...
