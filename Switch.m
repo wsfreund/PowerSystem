@@ -80,20 +80,20 @@ classdef Switch < handle & dynamicprops
 %    function changePosition(sw)
 %   Another way to use the changePosition function is not to specify the position. By using this way you just force the switch to changes it position.
 %
-      if nargin == 1
-        if nargin == 2
-          phase = 1:sw.ps.topology;
-        end
+      if nargin < 3
+        phase = 1:sw.ps.topology;
+      end
+      if nargin < 2
         if (sw.status(phase) == SwitchStatus.Open)
-          sw.status(phase) = SwitchStatus.Closed;
+          sw.status(phase) = repmat(SwitchStatus.Closed,sw.ps.topology,1);
         else
-          sw.status(phase) = SwitchStatus.Open;
+          sw.status(phase) = repmat(SwitchStatus.Open,sw.ps.topology,1);
         end
         notify(sw,'NewPosition');
-      elseif nargin == 2
+      elseif nargin > 1
         if(isa(position,'SwitchStatus'))
           if (sw.status(phase) ~= position)
-            sw.status(phase) = position;
+            sw.status(phase) = repmat(position,sw.ps.topology,1);
             notify(sw,'NewPosition');
           end
         else

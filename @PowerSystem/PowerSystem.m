@@ -32,21 +32,28 @@ classdef PowerSystem < handle
 %
 % Use PowerSystem.run(timeLimit) to run the PowerSystem until timeLimit
 %
-%     example:
-%     BUS1 BUS6 6e-3
-%     BUS1 CURRENT 1 STEP
-%     BUS1 BUS2 52e-3
-%     BUS1 GROUND 0.8e-3
-%     BUS2 BUS4 6e-3
-%     BUS2 BUS5 0.5
-%     BUS2 CURRENT 1.5
-%     BUS2 GROUND 0.8e-6
-%     BUS3 BUS5 SWITCH CLOSED
-%     BUS3 BUS4 SWITCH 
-%     BUS3 GROUND 22.61
-%     BUS6 VOLTAGE 1.05
-%     (Default value for switches = open)
-%   
+%    example:
+%    % Power System BUS Connections
+%    TRIPHASIC
+%    BUS1 BUS6 0 2.261946710584651
+%    BUS1 BUS2 0.05 0.7539822368615
+%    BUS1 GROUND 0 0 3.315727981081153
+%    BUS2 BUS4 0 2.261946710584651
+%    BUS2 BUS5 0.5
+%    BUS2 GROUND 0 0 3.3157e+03
+%    BUS3 GROUND 22.61 7.434264855454886 
+%    BUS3 GROUND 0 0 2652.582384864
+%    % PowerSystem Sources
+%    BUS6 VOLTAGE SINOIDAL 1.05 
+%    BUS2 CURRENT SINOIDAL 1.5 
+%    BUS1 CURRENT SINOIDAL 1  
+%    % PowerSystem Switches
+%    BUS3 BUS5 SWITCH OPEN
+%    BUS3 BUS4 SWITCH CLOSED
+%    % PowerSystem Events
+%    TIMED_EVENT 0.3 SWITCH BUS3 BUS4 % Change Switch 3 to 4 status on 0.3 ms
+%    TIMED_EVENT 0.7 SWITCH BUS3 BUS4 % Change Switch 3 to 4 again
+%    TIMED_EVENT 1.0 SWITCH BUS3 BUS5 % Now change Switch 3 to 5
 
   properties(GetAccess = public, SetAccess = private) % Only PowerSystem can set these properties, but everyone can read them
     sysYmodif = []               %   sysYmodif: Matrix with admitances and nodes connections;
@@ -159,8 +166,8 @@ classdef PowerSystem < handle
           hold on;
           plot(ps.timeVector,ps.sysVariablesMatrix(k,:));
           title(sprintf('SWITCH BUS %d to %d',...
-              ps.sysSwitches(k-(ps.sysNumberOfBuses+length(ps.sysVoltageSources))).busK,...
-              ps.sysSwitches(k-(ps.sysNumberOfBuses+length(ps.sysVoltageSources))).busM),'FontSize',20);
+            ps.sysSwitches(k-(ps.sysNumberOfBuses+length(ps.sysVoltageSources))).busK,...
+            ps.sysSwitches(k-(ps.sysNumberOfBuses+length(ps.sysVoltageSources))).busM),'FontSize',20);
           xlabel('Time (s)','FontSize',20);
           ylabel('Current on Switch (A)','FontSize',20);
           set(gca,'FontSize',16);
@@ -175,8 +182,8 @@ classdef PowerSystem < handle
             hold on;
             title(sprintf('SWITCH BUS %d to %d %s',...
                 ps.sysSwitches(k-(ps.sysNumberOfBuses+length(ps.sysVoltageSources))).busK,...
-                ps.sysSwitches(k-(ps.sysNumberOfBuses+length(ps.sysVoltageSources))).busM),...
-                char(64+phase),'FontSize',20);
+                ps.sysSwitches(k-(ps.sysNumberOfBuses+length(ps.sysVoltageSources))).busM,...
+                char(64+phase)),'FontSize',20);
             xlabel('Time (s)','FontSize',20);
             ylabel('Current on Switch (A)','FontSize',20);
             set(gca,'FontSize',16);
@@ -196,19 +203,20 @@ classdef PowerSystem < handle
 
   methods( Access = private )
     function updateSwitch(ps,src,~)
-      swichIdx = find( ps.sysSwitches == src ) + (ps.sysNumberOfBuses+length(ps.sysVoltageSources));
+      disp('On update Switch')
+      swichIdx = find( ps.sysSwitches == src ) + ps.sysNumberOfBuses+length(ps.sysVoltageSources)
       if src.isOpen
-        tempLine = zeros(1,ps.sysNumberOfBuses+length(ps.sysVoltageSources)+length(ps.sysSwitches));
-        tempLine(swichIdx) = 1;
-        ps.sysYmodif(swichIdx,:) = tempLine;
-        ps.sysYmodif(:,swichIdx) = tempLine';
+        tempLine = zeros(ps.topology,size(ps.sysYmodif,2));
+        tempLine(:,ps.topology*(swichIdx-1)+1:ps.topology*(swichIdx-1)+ps.topology) = eye(uint8(ps.topology));
+        ps.sysYmodif(ps.topology*(swichIdx-1)+1:ps.topology*(swichIdx-1)+ps.topology,:) = tempLine;
+        ps.sysYmodif(:,ps.topology*(swichIdx-1)+1:ps.topology*(swichIdx-1)+ps.topology) = tempLine';
         ps.sysInvYmodif = inv(ps.sysYmodif);
       else
-        tempLine = zeros(1,ps.sysNumberOfBuses+length(ps.sysVoltageSources)+length(ps.sysSwitches));
-        tempLine(src.busK) = 1;
-        tempLine(src.busM) = -1;
-        ps.sysYmodif(swichIdx,:) = tempLine;
-        ps.sysYmodif(:,swichIdx) = tempLine';
+        tempLine = zeros(ps.topology,size(ps.sysYmodif,2));
+        tempLine(:,ps.topology*(src.busK-1)+1:ps.topology*(src.busK-1)+ps.topology) = eye(uint8(ps.topology));
+        tempLine(:,ps.topology*(src.busM-1)+1:ps.topology*(src.busM-1)+ps.topology) = -eye(uint8(ps.topology));
+        ps.sysYmodif(ps.topology*(swichIdx-1)+1:ps.topology*(swichIdx-1)+ps.topology,:) = tempLine;
+        ps.sysYmodif(:,ps.topology*(swichIdx-1)+1:ps.topology*(swichIdx-1)+ps.topology) = tempLine';
         ps.sysInvYmodif = inv(ps.sysYmodif);
       end
     end % updateSwitch

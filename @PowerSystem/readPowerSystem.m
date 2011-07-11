@@ -127,7 +127,8 @@ function readPowerSystem(ps, file)
       secondBUS = 0; % ...than set it to zero
     % Checking for Sources:
     elseif strcmp(tWords{2}{1},'CURRENT') % Current Sources
-      tCurrent = tWords{3};
+      lastWord = textscan(tLine,'%*s %*s %s %f64 %f64 %f64 %f64 %f64 %f64 %f64 %f64 %f64');
+      tCurrent = [lastWord{2}; lastWord{5}; lastWord{8}];
       if (isempty(tCurrent))
         display(sprintf('IGNORING BADLY FORMATED LINE NUMBER %d:', lineC ));
         disp(tLine)
@@ -135,13 +136,22 @@ function readPowerSystem(ps, file)
         lineC = lineC + 1;
         continue;
       end
-      lastWord = textscan(tLine,'%*s %*s %*f64 %s');
+      tPhase = [lastWord{3}; lastWord{6}; lastWord{9}]*pi/180;
+      tFreq = [lastWord{4}; lastWord{7}; lastWord{10}];
       if isempty(lastWord{1}) || strcmp(lastWord{1}{1},'STEP')
         tCurrentSource = RampSource(ps,firstBUS, SourceTypes.Current,'step',tCurrent);
         ps.sysCurrentSources = [ps.sysCurrentSources; tCurrentSource];
       elseif strcmp(lastWord{1}{1},'SINOIDAL') 
-        tCurrentSource = RampSource(ps,firstBUS, SourceTypes.Current,'sinoidal',tCurrent);
-        ps.sysCurrentSources = [ps.sysCurrentSources; tCurrentSource];
+        if(~isempty(tPhase))
+          tCurrentSource = RampSource(ps,firstBUS, SourceTypes.Current,'sinoidal',tCurrent,tPhase);
+          ps.sysCurrentSources = [ps.sysCurrentSources; tCurrentSource];
+        elseif(~isempty(tFreq))
+          tCurrentSource = RampSource(ps,firstBUS, SourceTypes.Current,'sinoidal',tCurrent,tPhase,tFreq);
+          ps.sysCurrentSources = [ps.sysCurrentSources; tCurrentSource];
+        else
+          tCurrentSource = RampSource(ps,firstBUS, SourceTypes.Current,'sinoidal',tCurrent);
+          ps.sysCurrentSources = [ps.sysCurrentSources; tCurrentSource];
+        end
       else
         display(sprintf('IGNORING BADLY FORMATED LINE NUMBER %d:', lineC ));
         disp(tLine)
@@ -150,7 +160,8 @@ function readPowerSystem(ps, file)
       lineC = lineC + 1;
       continue;
     elseif strcmp(tWords{2}{1},'VOLTAGE') % Voltage Sources
-      tVoltage = tWords{3};
+      lastWord = textscan(tLine,'%*s %*s %s %f64 %f64 %f64 %f64 %f64 %f64 %f64 %f64 %f64');
+      tVoltage = [lastWord{2}; lastWord{5}; lastWord{8}];
       if (isempty(tVoltage))
         display(sprintf('IGNORING BADLY FORMATED LINE NUMBER %d:', lineC ));
         disp(tLine)
@@ -158,13 +169,22 @@ function readPowerSystem(ps, file)
         lineC = lineC + 1;
         continue;
       end
-      lastWord = textscan(tLine,'%*s %*s %*f64 %s');
+      tPhase = [lastWord{3}; lastWord{6}; lastWord{9}]*pi/180;
+      tFreq = [lastWord{4}; lastWord{7}; lastWord{10}];
       if isempty(lastWord{1}) || strcmp(lastWord{1}{1},'STEP')
         tVoltageSource = RampSource(ps,firstBUS, SourceTypes.Voltage,'step',tVoltage);
         ps.sysVoltageSources = [ps.sysVoltageSources; tVoltageSource];
       elseif strcmp(lastWord{1}{1},'SINOIDAL')
-        tVoltageSource = RampSource(ps,firstBUS,SourceTypes.Voltage,'sinoidal',tVoltage);
-        ps.sysVoltageSources = [ps.sysVoltageSources; tVoltageSource];
+        if(~isempty(tPhase))
+          tVoltageSource = RampSource(ps,firstBUS, SourceTypes.Voltage,'sinoidal',tVoltage,tPhase);
+          ps.sysVoltageSources = [ps.sysVoltageSources; tVoltageSource];
+        elseif(~isempty(tFreq))
+          tVoltageSource = RampSource(ps,firstBUS, SourceTypes.Voltage,'sinoidal',tVoltage,tPhase,tFreq);
+          ps.sysVoltageSources = [ps.sysVoltageSources; tVoltageSource];
+        else
+          tVoltageSource = RampSource(ps,firstBUS, SourceTypes.Voltage,'sinoidal',tVoltage);
+          ps.sysVoltageSources = [ps.sysVoltageSources; tVoltageSource];
+        end
       else
         display(sprintf('IGNORING BADLY FORMATED LINE NUMBER %d:', lineC ));
         disp(tLine)
