@@ -203,8 +203,7 @@ classdef PowerSystem < handle
 
   methods( Access = private )
     function updateSwitch(ps,src,~)
-      disp('On update Switch')
-      swichIdx = find( ps.sysSwitches == src ) + ps.sysNumberOfBuses+length(ps.sysVoltageSources)
+      swichIdx = find( ps.sysSwitches == src ) + ps.sysNumberOfBuses+length(ps.sysVoltageSources);
       if src.isOpen
         tempLine = zeros(ps.topology,size(ps.sysYmodif,2));
         tempLine(:,ps.topology*(swichIdx-1)+1:ps.topology*(swichIdx-1)+ps.topology) = eye(uint8(ps.topology));
