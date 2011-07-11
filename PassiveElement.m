@@ -24,7 +24,6 @@ classdef PassiveElement < handle & Source
     ikm = 0.;                                   % ikm: Current flowing from bus k to bus m;
   end
 
-
   properties(Access = private, Hidden) % Only PassiveElement can set and see these properties
     Vc = 0.;                                    % Vc: Capacitor Voltage;
     prev_ikm = 0.;                              % prev_ikm: Current flowing from bus k to bus m on t - Delta_t;
@@ -33,37 +32,41 @@ classdef PassiveElement < handle & Source
   end
 
   methods
-    function pe = PassiveElement(step,busK,busM,R,L,C)
+    function pe = PassiveElement(ps,busK,busM,R,L,C)
       if ( (nargin < 5) && (nargin > 0) ) % It is not possible to initialize without at least 5 arguments.
         error('PowerSystemPkg:PassiveElement', 'You must specify at least 5 args to construct a PassiveElement PassiveElement(ps,bus1,bus2,R,L,C,initial_injection)');
       end
+      pe@Source(ps, busK, SourceTypes.Current);
       if nargin == 0
         busK=0;
       end
-      pe@Source(busK, SourceTypes.Current);
       if nargin > 2
         pe.busM = busM;
       end
       if nargin > 3
         if nargin == 5
-          C = 0.;
+          C = 0.*ones(pe.ps.topology);
         end
-        pe.R = R;
-        pe.L = L;
-        pe.L2DivStep = (L*2)/step;
-        pe.C = C; 
-        if C
-          pe.stepDiv2C= step/(2*C);
+        if size(R,1) == 1
+          pe.R = R*ones(pe.ps.topology,1);
+          pe.L = L*ones(pe.ps.topology,1);
+          pe.C = C*ones(pe.ps.topology,1); 
+        else
+          pe.R = R;
+          pe.L = L;
+          pe.C = C;
         end
-        if ( C ~= 0 ) % With Capacitor:
-          pe.Gseries = 1 / (pe.R + pe.L2DivStep + pe.stepDiv2C);
+        pe.L2DivStep = (pe.L*2)./pe.ps.sysStep;
+        if ~isempty(find(pe.C)) % With Capacitor
+          pe.stepDiv2C = pe.ps.sysStep./(2.*pe.C);
+          pe.Gseries = 1 ./ (pe.R + pe.L2DivStep + pe.stepDiv2C);
           pe.injection_function = @( prev_ikm, prev_vbusK, prev_vbusM ) ...
-            pe.Gseries*( (pe.L2DivStep - pe.R - pe.stepDiv2C)*( prev_ikm ) ...
-            + prev_vbusK - prev_vbusM - 2*pe.Vc ); % Since pe.Vc is only updated after pe.injection this pe.Vc is on t-Deltat
+            pe.Gseries.*( (pe.L2DivStep - pe.R - pe.stepDiv2C).*( prev_ikm ) ...
+            + prev_vbusK - prev_vbusM - 2.*pe.Vc ); % Since pe.Vc is only updated after pe.injection this pe.Vc is on t-Deltat
         else % Without capacitor:
-          pe.Gseries = 1 / ( pe.R + pe.L2DivStep );
+          pe.Gseries = 1 ./ ( pe.R + pe.L2DivStep );
           pe.injection_function = @(prev_ikm, prev_vbusK, prev_vbusM) ...
-            pe.Gseries*( (pe.L2DivStep - pe.R)*(prev_ikm) + prev_vbusK - prev_vbusM );
+            pe.Gseries.*( (pe.L2DivStep - pe.R).*(prev_ikm) + prev_vbusK - prev_vbusM );
         end
       end
     end % Constructor
@@ -92,9 +95,9 @@ classdef PassiveElement < handle & Source
 %     vbusK: voltage on bus K;
 %     vbusM: voltage on bus M;
 %
-      pe.ikm = pe.injection + pe.Gseries*(vbusK-vbusM); % update ikm
-      if pe.C
-        pe.Vc = pe.Vc + (pe.stepDiv2C) * ( pe.ikm + pe.prev_ikm );
+      pe.ikm = pe.injection + pe.Gseries.*(vbusK-vbusM); % update ikm
+      if ~isempty(find(pe.C)) % update Vc
+        pe.Vc = pe.Vc + (pe.stepDiv2C) .* ( pe.ikm + pe.prev_ikm );
       end
     end % update_ikm
   end % methods

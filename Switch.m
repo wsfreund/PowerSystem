@@ -21,44 +21,59 @@ classdef Switch < handle & dynamicprops
     timedChanges                  % timedChanges: Switch changing Times
   end
 
+  properties(Access = private) % Only Source and it childs can set and see these properties
+    ps;                           % PowerSystem pointer
+  end
+
   events
     NewPosition
   end
 
   methods
-    function sw = Switch(busK, busM, status)
+    function sw = Switch(ps, busK, busM, status)
       if nargin > 0
-        if nargin == 2
-          status = SwitchStatus.Open
+        sw.ps = ps;
+        if nargin == 3
+          status = repmat(SwitchStatus.Open,sw.ps.topology,1);
         end
         sw.busK = busK;
         sw.busM = busM;
         if isa(sw.status,'SwitchStatus')
-          sw.status = status;
+          if ( size(status,1) == 1)
+            sw.status = repmat(status,sw.ps.topology,1);
+          else
+            sw.status = status;
+          end
         else
           error('PowerSystemPkg:Switch', 'status must be a SwitchStatus object: SwitchStatus.Open/Closed');
         end
       end
     end % Constructor
 
-    function bool = isOpen(sw)
-%    function bool = isOpen(sw)
+    function bool = isOpen(sw,phase)
+%    function bool = isOpen(sw,phase)
 %
 %   This function returns true if the switch is open and false otherwise.
 %
-      bool = (SwitchStatus.Open == sw.status);
+      if nargin == 1
+        phase = 1:sw.ps.topology;
+      end
+      bool = (SwitchStatus.Open == sw.status(phase));
     end % function isOpen
 
-    function bool = isClosed(sw)
-%    function bool = isClosed(sw)
+    function bool = isClosed(sw,phase)
+%    function bool = isClosed(sw,phase)
 %
 %   This function returns true if the switch is closed and false otherwise.
 %
-      bool = (SwitchStatus.Closed == sw.status);
+      if nargin == 1
+        phase = 1:sw.ps.topology;
+      end
+      bool = (SwitchStatus.Closed == sw.status(phase));
     end % function isClosed
 
-    function changePosition(sw,position)
-%    function changePosition(sw,position)
+    function changePosition(sw,position,phase)
+%    function changePosition(sw,position,phase)
 %
 %   This function changes the switch position into input position. 
 %
@@ -66,16 +81,19 @@ classdef Switch < handle & dynamicprops
 %   Another way to use the changePosition function is not to specify the position. By using this way you just force the switch to changes it position.
 %
       if nargin == 1
-        if (sw.status == SwitchStatus.Open)
-          sw.status = SwitchStatus.Closed;
+        if nargin == 2
+          phase = 1:sw.ps.topology;
+        end
+        if (sw.status(phase) == SwitchStatus.Open)
+          sw.status(phase) = SwitchStatus.Closed;
         else
-          sw.status = SwitchStatus.Open;
+          sw.status(phase) = SwitchStatus.Open;
         end
         notify(sw,'NewPosition');
       elseif nargin == 2
         if(isa(position,'SwitchStatus'))
-          if (sw.status ~= position)
-            sw.status = position;
+          if (sw.status(phase) ~= position)
+            sw.status(phase) = position;
             notify(sw,'NewPosition');
           end
         else
@@ -84,13 +102,13 @@ classdef Switch < handle & dynamicprops
       end
     end % function changePosition
 
-    function addTimedChange(sw, ps, time)
-      if ps.currentTime < time % We will change the time only if it hasnt passed
+    function addTimedChange(sw, time)
+      if sw.ps.currentTime < time % We will change the time only if it hasnt passed
         sw.timedChanges = [time, sw.timedChanges];
         [sw.timedChanges, idx] = sort(sw.timedChanges);
         if (isempty(sw.findprop('timeListener'))) % We need to add a listener to the PowerSystem time
           sw.addprop('timeListener'); % add a property so that we can reach the listener and delete it when it is not necessary anymore
-          sw.timeListener = addlistener(ps,'currentTime','PostSet',@sw.changeOnTime);
+          sw.timeListener = addlistener(sw.ps,'currentTime','PostSet',@sw.changeOnTime);
         end
       else
         display(sprintf('ATTEMPTED TO SET A SWITCH CHANGE ON SYSTEM PAST TIME %f, POWER SYSTEM CURRENT TIME IS %f', time, ps.currentTime));
@@ -100,7 +118,7 @@ classdef Switch < handle & dynamicprops
 
   methods (Access = private)
     function changeOnTime(sw, src, evt)
-      if ( sw.timedChanges(1) <= evt.AffectedObject.currentTime)
+      if ( sw.timedChanges(1) <= sw.ps.currentTime)
         sw.changePosition
         if (length(sw.timedChanges)>1) % Is there more timed changes?
           sw.timedChanges = sw.timedChanges(2:end); % Update them
