@@ -241,11 +241,14 @@ function readPowerSystem(ps, file)
     end
     % Capacitance is supposed to be the fifth word
     if (~isempty(tWords{5}))
-      tCapacitance = 1./(2*pi*[tWords{5}; tWords{8}; tWords{11}]);% Inputs should be on frequency domain
+      tCapacitance = 1./(2*pi*60*[tWords{5}; tWords{8}; tWords{11}]);% Inputs should be on frequency domain
       tCapacitance(tCapacitance==inf)=0;
     end
     if isempty(ps.sysYmodif)
-      ps.sysYmodif(secondBUS,secondBUS) = 0;
+      ps.sysYmodif(...
+        ps.topology*(secondBUS-1)+1:ps.topology*(secondBUS-1)+ps.topology,...
+        ps.topology*(secondBUS-1)+1:ps.topology*(secondBUS-1)+ps.topology...
+      ) = zeros(uint8(ps.topology));
     end
     if (firstBUS == 0) % Shunt element
       if (~isempty(tInductance) || ~isempty(tCapacitance))
