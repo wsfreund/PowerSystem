@@ -102,7 +102,7 @@ function readPowerSystem(ps, file)
           continue;
         end
         switchIdx = find( [ps.sysSwitches.busK] == firstBUS);
-        if ~isempty(switchIdx)
+        if length(switchIdx)>1
           switchIdx = find( [ps.sysSwitches(switchIdx).busM] == secondBUS);
         end
         if ~isempty(switchIdx)
